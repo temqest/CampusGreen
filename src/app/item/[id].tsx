@@ -1,5 +1,9 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Dimensions,
+  FlatList,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -14,6 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { MOCK_ITEMS } from '@/data/mock-items';
+import { ItemPhoto } from '@/types/item';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,6 +29,19 @@ export default function ItemDetailScreen() {
   const insets = useSafeAreaInsets();
 
   const item = MOCK_ITEMS.find((i) => i.id === id) || MOCK_ITEMS[0];
+  const photos: ItemPhoto[] =
+    item.photos && item.photos.length > 0
+      ? item.photos
+      : [
+          {
+            id: 'p1',
+            label: 'Main View',
+            iconName: 'cube-outline',
+          },
+        ];
+
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const carouselRef = useRef<FlatList<ItemPhoto>>(null);
 
   const handleShare = async () => {
     try {
@@ -33,21 +53,22 @@ export default function ItemDetailScreen() {
     }
   };
 
-  const getCategoryIcon = () => {
-    switch (item.category) {
-      case 'Textbooks & Reviewers':
-        return 'book-outline';
-      case 'Uniforms & Scrubs':
-        return 'shirt-outline';
-      case 'Tools & Lab Gear':
-        return 'construct-outline';
-      case 'Dorm & Room':
-        return 'home-outline';
-      case 'Tech & Gadgets':
-        return 'hardware-chip-outline';
-      default:
-        return 'cube-outline';
+  const handleCarouselScroll = (
+    event: NativeSyntheticEvent<NativeScrollEvent>
+  ) => {
+    const offsetX = event.nativeEvent.contentOffset.x;
+    const index = Math.round(offsetX / SCREEN_WIDTH);
+    if (index >= 0 && index < photos.length) {
+      setActivePhotoIndex(index);
     }
+  };
+
+  const scrollToPhoto = (index: number) => {
+    setActivePhotoIndex(index);
+    carouselRef.current?.scrollToIndex({
+      index,
+      animated: true,
+    });
   };
 
   return (
@@ -59,23 +80,46 @@ export default function ItemDetailScreen() {
           styles.scrollContent,
           { paddingBottom: insets.bottom + 84 },
         ]}>
-        {/* Edge-to-Edge Hero Image / Motif Area */}
-        <View
-          style={[
-            styles.heroArea,
-            { backgroundColor: theme.surfaceSubtle },
-          ]}>
-          {/* Background Concentric Vector Circles */}
-          <View style={styles.concentricOuter}>
-            <View style={styles.concentricInner}>
-              <Ionicons
-                name={getCategoryIcon()}
-                size={64}
-                color={theme.primary}
-                style={styles.categoryIcon}
-              />
-            </View>
-          </View>
+        {/* Swipeable Multi-Photo Hero Carousel */}
+        <View style={styles.carouselWrapper}>
+          <FlatList
+            ref={carouselRef}
+            data={photos}
+            keyExtractor={(p) => p.id}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={handleCarouselScroll}
+            renderItem={({ item: photo, index }) => (
+              <View
+                style={[
+                  styles.heroSlide,
+                  {
+                    width: SCREEN_WIDTH,
+                    backgroundColor: theme.surfaceSubtle,
+                  },
+                ]}>
+                {/* Background Concentric Vector Circles */}
+                <View style={styles.concentricOuter}>
+                  <View style={styles.concentricInner}>
+                    <Ionicons
+                      name={photo.iconName}
+                      size={64}
+                      color={theme.primary}
+                      style={styles.categoryIcon}
+                    />
+                  </View>
+                </View>
+
+                {/* Photo Angle Tag in slide */}
+                <View style={styles.photoAngleLabel}>
+                  <Text style={styles.photoAngleText}>
+                    {photo.label}
+                  </Text>
+                </View>
+              </View>
+            )}
+          />
 
           {/* Floating Deal / Price Tag at bottom right of the hero */}
           <View style={styles.heroDealTagContainer}>
@@ -107,6 +151,29 @@ export default function ItemDetailScreen() {
               </View>
             )}
           </View>
+
+          {/* Pagination Dots at bottom center */}
+          {photos.length > 1 && (
+            <View style={styles.paginationRow}>
+              {photos.map((_, i) => (
+                <View
+                  key={`dot-${i}`}
+                  style={[
+                    styles.paginationDot,
+                    i === activePhotoIndex
+                      ? [
+                          styles.paginationDotActive,
+                          { backgroundColor: theme.primary },
+                        ]
+                      : [
+                          styles.paginationDotInactive,
+                          { backgroundColor: 'rgba(0, 0, 0, 0.2)' },
+                        ],
+                  ]}
+                />
+              ))}
+            </View>
+          )}
         </View>
 
         {/* Item Details Body */}
@@ -180,7 +247,7 @@ export default function ItemDetailScreen() {
           {/* Section Divider */}
           <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
 
-          {/* Description */}
+          {/* Description Section */}
           <View style={styles.section}>
             <Text style={[styles.sectionHeading, { color: theme.text }]}>
               About this item
@@ -188,6 +255,69 @@ export default function ItemDetailScreen() {
             <Text style={[styles.description, { color: theme.textSecondary }]}>
               {item.description}
             </Text>
+          </View>
+
+          {/* Section Divider */}
+          <View style={[styles.divider, { backgroundColor: theme.borderSubtle }]} />
+
+          {/* Photo Gallery Section (Thumbnails corresponding to swipable photos) */}
+          <View style={styles.section}>
+            <View style={styles.galleryHeader}>
+              <Text style={[styles.sectionHeading, { color: theme.text }]}>
+                Photo Gallery
+              </Text>
+              <Text style={[styles.galleryCount, { color: theme.textSecondary }]}>
+                {photos.length} {photos.length === 1 ? 'photo' : 'photos'}
+              </Text>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.galleryScroll}>
+              {photos.map((photo, index) => {
+                const isActive = index === activePhotoIndex;
+                return (
+                  <Pressable
+                    key={photo.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${photo.label}`}
+                    style={({ pressed }) => [
+                      styles.thumbnailCard,
+                      {
+                        backgroundColor: theme.surface,
+                        borderColor: isActive ? theme.primary : theme.border,
+                        borderWidth: isActive ? 2 : 1,
+                        opacity: pressed ? 0.75 : 1,
+                      },
+                    ]}
+                    onPress={() => scrollToPhoto(index)}>
+                    <View
+                      style={[
+                        styles.thumbnailIconBox,
+                        { backgroundColor: theme.surfaceSubtle },
+                      ]}>
+                      <Ionicons
+                        name={photo.iconName}
+                        size={24}
+                        color={isActive ? theme.primary : theme.textSecondary}
+                      />
+                    </View>
+                    <Text
+                      numberOfLines={1}
+                      style={[
+                        styles.thumbnailLabel,
+                        {
+                          color: isActive ? theme.primary : theme.textSecondary,
+                          fontWeight: isActive ? '700' : '500',
+                        },
+                      ]}>
+                      {photo.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
 
           {/* Section Divider */}
@@ -388,9 +518,12 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
-  heroArea: {
-    height: 240,
-    width: '100%',
+  carouselWrapper: {
+    position: 'relative',
+    height: 250,
+  },
+  heroSlide: {
+    height: 250,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -415,10 +548,25 @@ const styles = StyleSheet.create({
   categoryIcon: {
     opacity: 0.9,
   },
+  photoAngleLabel: {
+    position: 'absolute',
+    top: 70,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  photoAngleText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
   heroDealTagContainer: {
     position: 'absolute',
-    bottom: 16,
+    bottom: 14,
     right: 16,
+    zIndex: 5,
   },
   heroDealBadge: {
     paddingHorizontal: 14,
@@ -440,6 +588,27 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  paginationRow: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    zIndex: 5,
+  },
+  paginationDot: {
+    height: 6,
+    borderRadius: Radius.full,
+  },
+  paginationDotActive: {
+    width: 18,
+  },
+  paginationDotInactive: {
+    width: 6,
   },
   body: {
     paddingHorizontal: Spacing.four,
@@ -535,6 +704,39 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     lineHeight: 22,
+  },
+  galleryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 4,
+  },
+  galleryCount: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  galleryScroll: {
+    gap: 10,
+    paddingVertical: 2,
+  },
+  thumbnailCard: {
+    width: 96,
+    borderRadius: Radius.md,
+    padding: 8,
+    alignItems: 'center',
+    gap: 6,
+  },
+  thumbnailIconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  thumbnailLabel: {
+    fontSize: 10,
+    textAlign: 'center',
+    width: '100%',
   },
   meetupCard: {
     flexDirection: 'row',

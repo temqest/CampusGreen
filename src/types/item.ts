@@ -1,3 +1,5 @@
+import { Ionicons } from '@expo/vector-icons';
+
 export type TradeType = 'buy' | 'swap' | 'free';
 
 export type Condition = 'Brand New' | 'Like New' | 'Good' | 'Well-Loved';
@@ -19,6 +21,13 @@ export interface GreenImpactStats {
   userMoneySavedPhp: number;
 }
 
+export interface ItemPhoto {
+  id: string;
+  label: string;
+  iconName: keyof typeof Ionicons.glyphMap;
+  uri?: string;
+}
+
 export interface MarketplaceItem {
   id: string;
   title: string;
@@ -37,6 +46,7 @@ export interface MarketplaceItem {
   isReserved?: boolean;
   createdAt: string;
   imageUrl?: string;
+  photos?: ItemPhoto[];
   description: string;
   estimatedCo2SavedKg: number;
 }

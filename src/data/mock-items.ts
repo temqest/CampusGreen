@@ -28,8 +28,14 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     isVerifiedStudent: true,
     createdAt: '15m ago',
     description:
-      'Worn for only one clinical rotation semester before sizing up. No stains, freshly washed and pressed.',
+      'Worn for only one clinical rotation semester before sizing up. No stains, freshly washed and pressed. Comes with official college emblem patch.',
     estimatedCo2SavedKg: 4.2,
+    photos: [
+      { id: 'p1', label: 'Top & Pants Set', iconName: 'shirt-outline' },
+      { id: 'p2', label: 'Size M Tag & Label', iconName: 'pricetag-outline' },
+      { id: 'p3', label: 'Fabric & Seams Close-up', iconName: 'cut-outline' },
+      { id: 'p4', label: 'Emblem Patch Detail', iconName: 'shield-checkmark-outline' },
+    ],
   },
   {
     id: '2',
@@ -48,8 +54,14 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     isVerifiedStudent: true,
     createdAt: '45m ago',
     description:
-      'Official PRC board-exam compliant calculator with solar panel intact. Includes hard slide-on case.',
+      'Official PRC board-exam compliant calculator with solar panel intact. High-resolution LCD display and authentic slide-on protective hard case included.',
     estimatedCo2SavedKg: 2.1,
+    photos: [
+      { id: 'p1', label: 'Front & LCD Display', iconName: 'hardware-chip-outline' },
+      { id: 'p2', label: 'Keypad & Math Functions', iconName: 'calculator-outline' },
+      { id: 'p3', label: 'Back Label & Serial Number', iconName: 'barcode-outline' },
+      { id: 'p4', label: 'Slide-On Hard Case', iconName: 'shield-outline' },
+    ],
   },
   {
     id: '3',
@@ -68,8 +80,13 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     isVerifiedStudent: true,
     createdAt: '1h ago',
     description:
-      'Passing forward my printed readings for Purposive Comm, Ethics, and Readings in Phil History with highlighted notes.',
+      'Passing forward my printed readings for Purposive Comm, Ethics, and Readings in Phil History with highlighted notes and summaries.',
     estimatedCo2SavedKg: 3.5,
+    photos: [
+      { id: 'p1', label: 'Bundle Overview', iconName: 'book-outline' },
+      { id: 'p2', label: 'Sample Highlighted Notes', iconName: 'document-text-outline' },
+      { id: 'p3', label: 'Table of Topics Covered', iconName: 'list-outline' },
+    ],
   },
   {
     id: '4',
@@ -88,8 +105,14 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     isVerifiedStudent: true,
     createdAt: '2h ago',
     description:
-      'Heavy-duty magnetic drafting board. Looking to swap for a working 35mm film camera or desk study lamp.',
+      'Heavy-duty magnetic drafting board with carry handle. Smooth surface with no deep scratches. Looking to swap for a working desk study lamp.',
     estimatedCo2SavedKg: 8.6,
+    photos: [
+      { id: 'p1', label: 'Full Board & T-Square', iconName: 'easel-outline' },
+      { id: 'p2', label: 'Rotring Ruler Edge', iconName: 'pencil-outline' },
+      { id: 'p3', label: 'Magnetic Clamps', iconName: 'attach-outline' },
+      { id: 'p4', label: 'Carry Bag with Straps', iconName: 'briefcase-outline' },
+    ],
   },
   {
     id: '5',
@@ -108,8 +131,13 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     isVerifiedStudent: true,
     createdAt: '3h ago',
     description:
-      'Hardcover edition with all chapter summaries intact. Perfect for pre-med or bio freshmen.',
+      'Hardcover edition with all chapter diagrams intact. Crisp binding with slight highlighting on genetics chapters. Essential for bio majors.',
     estimatedCo2SavedKg: 5.4,
+    photos: [
+      { id: 'p1', label: 'Hardcover Front', iconName: 'book-outline' },
+      { id: 'p2', label: 'Binding & Spine', iconName: 'bookmarks-outline' },
+      { id: 'p3', label: 'Sample Colored Diagrams', iconName: 'images-outline' },
+    ],
   },
   {
     id: '6',
@@ -128,8 +156,14 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     isVerifiedStudent: true,
     createdAt: '5h ago',
     description:
-      'Brand new surgical steel dissection instruments in zipper pouch. Bought an extra set by mistake.',
+      'Brand new surgical steel dissection instruments in zipper pouch. Includes forceps, needle probes, scissors, scalpel handle, and 10 sealed sterile blades.',
     estimatedCo2SavedKg: 1.8,
+    photos: [
+      { id: 'p1', label: 'Case Opened / All Tools', iconName: 'construct-outline' },
+      { id: 'p2', label: 'Stainless Forceps & Scissors', iconName: 'cut-outline' },
+      { id: 'p3', label: 'Sealed Scalpel Blades', iconName: 'medkit-outline' },
+      { id: 'p4', label: 'Zipper Pouch Exterior', iconName: 'file-tray-full-outline' },
+    ],
   },
   {
     id: '7',
@@ -148,8 +182,13 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     isVerifiedStudent: true,
     createdAt: '6h ago',
     description:
-      'Quiet 3-speed oscillating clip fan, perfect for dorm bunk beds. Includes safety surge-protected extension cord.',
+      'Quiet 3-speed oscillating clip fan, perfect for dorm bunk beds. Includes safety surge-protected extension cord with individual switches.',
     estimatedCo2SavedKg: 6.3,
+    photos: [
+      { id: 'p1', label: 'Fan & Extension Cord', iconName: 'home-outline' },
+      { id: 'p2', label: 'Clamp & Head Pivot', iconName: 'repeat-outline' },
+      { id: 'p3', label: 'Surge Switch Board', iconName: 'flash-outline' },
+    ],
   },
   {
     id: '8',
@@ -170,6 +209,11 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     description:
       'Millano & Cruz intermediate accounting books in good condition. Want to trade for Hector De Leon ObliCon book.',
     estimatedCo2SavedKg: 4.0,
+    photos: [
+      { id: 'p1', label: 'Vol 1-3 Front Covers', iconName: 'book-outline' },
+      { id: 'p2', label: 'Editions & Publication Year', iconName: 'newspaper-outline' },
+      { id: 'p3', label: 'Pages & Highlighting', iconName: 'document-text-outline' },
+    ],
   },
   {
     id: '9',
@@ -190,5 +234,10 @@ export const MOCK_ITEMS: MarketplaceItem[] = [
     description:
       'Clean chemical-resistant graduated beakers (250ml, 500ml) and 12-slot plastic test tube rack for free to underclassmen.',
     estimatedCo2SavedKg: 3.1,
+    photos: [
+      { id: 'p1', label: 'Beakers & Rack Set', iconName: 'flask-outline' },
+      { id: 'p2', label: 'Graduation Measurement Markings', iconName: 'analytics-outline' },
+      { id: 'p3', label: 'Test Tube Slots', iconName: 'grid-outline' },
+    ],
   },
 ];
