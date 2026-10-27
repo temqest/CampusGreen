@@ -6,6 +6,7 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -25,6 +26,8 @@ export function ItemCard({ item }: ItemCardProps) {
       params: { id: item.id },
     });
   };
+
+  const photoUri = item.imageUrl || item.photos?.[0]?.uri;
 
   // Helper icon for category vector placeholder
   const getCategoryIcon = () => {
@@ -59,20 +62,29 @@ export function ItemCard({ item }: ItemCardProps) {
         },
       ]}
       onPress={handlePress}>
-      {/* Visual Placeholder / Image Area */}
+      {/* Visual Image Area */}
       <View
         style={[
           styles.imageArea,
           { backgroundColor: theme.surfaceSubtle },
         ]}>
-        <View style={styles.motifBackground}>
-          <Ionicons
-            name={getCategoryIcon()}
-            size={36}
-            color={theme.primary}
-            style={styles.categoryGlyph}
+        {photoUri ? (
+          <Image
+            source={{ uri: photoUri }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
           />
-        </View>
+        ) : (
+          <View style={styles.motifBackground}>
+            <Ionicons
+              name={getCategoryIcon()}
+              size={36}
+              color={theme.primary}
+              style={styles.categoryGlyph}
+            />
+          </View>
+        )}
 
         {/* Dynamic Actionable State Badge ONLY (Price / Swap / Free) */}
         <View style={styles.badgeTopLeft}>

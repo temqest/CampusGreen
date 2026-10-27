@@ -13,8 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Spacing, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { ItemCategory, MarketplaceItem, TradeType } from '@/types/item';
-import { INITIAL_GREEN_IMPACT, MOCK_ITEMS } from '@/data/mock-items';
+import { useItems } from '@/context/items-context';
+import { ItemCategory, TradeType } from '@/types/item';
+import { INITIAL_GREEN_IMPACT } from '@/data/mock-items';
 
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { GreenImpactCard } from '@/components/marketplace/green-impact-card';
@@ -30,6 +31,7 @@ const CAMPUS_OPTIONS = [
 
 export default function MarketplaceScreen() {
   const theme = useTheme();
+  const { items } = useItems();
 
   // State
   const [selectedCampus, setSelectedCampus] = useState('Ateneo de Naga University');
@@ -38,7 +40,6 @@ export default function MarketplaceScreen() {
   const [selectedTradeType, setSelectedTradeType] = useState<TradeType | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [items] = useState<MarketplaceItem[]>(MOCK_ITEMS);
   const [greenStats] = useState(INITIAL_GREEN_IMPACT);
 
   // Pull-to-refresh

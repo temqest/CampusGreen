@@ -32,6 +32,13 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CampusGreen needs access to your photos to upload images of your textbooks and campus gear.",
+          "cameraPermission": "CampusGreen needs access to your camera so you can take clear photos of your items."
+        }
       ]
     ],
     "experiments": {

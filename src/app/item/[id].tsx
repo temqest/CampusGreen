@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useItems } from '@/context/items-context';
 import { MOCK_ITEMS } from '@/data/mock-items';
 import { ItemPhoto } from '@/types/item';
 
@@ -27,8 +29,9 @@ export default function ItemDetailScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { items } = useItems();
 
-  const item = MOCK_ITEMS.find((i) => i.id === id) || MOCK_ITEMS[0];
+  const item = items.find((i) => i.id === id) || items[0] || MOCK_ITEMS[0];
   const photos: ItemPhoto[] =
     item.photos && item.photos.length > 0
       ? item.photos
@@ -37,6 +40,7 @@ export default function ItemDetailScreen() {
             id: 'p1',
             label: 'Main View',
             iconName: 'cube-outline',
+            uri: item.imageUrl,
           },
         ];
 
@@ -99,17 +103,26 @@ export default function ItemDetailScreen() {
                     backgroundColor: theme.surfaceSubtle,
                   },
                 ]}>
-                {/* Background Concentric Vector Circles */}
-                <View style={styles.concentricOuter}>
-                  <View style={styles.concentricInner}>
-                    <Ionicons
-                      name={photo.iconName}
-                      size={64}
-                      color={theme.primary}
-                      style={styles.categoryIcon}
-                    />
+                {photo.uri ? (
+                  <Image
+                    source={{ uri: photo.uri }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  /* Background Concentric Vector Circles */
+                  <View style={styles.concentricOuter}>
+                    <View style={styles.concentricInner}>
+                      <Ionicons
+                        name={photo.iconName || 'cube-outline'}
+                        size={64}
+                        color={theme.primary}
+                        style={styles.categoryIcon}
+                      />
+                    </View>
                   </View>
-                </View>
+                )}
 
                 {/* Photo Angle Tag in slide */}
                 <View style={styles.photoAngleLabel}>

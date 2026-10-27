@@ -165,7 +165,34 @@ This document captures project-specific design standards, user preferences, and 
 
 ---
 
-## 9. End-of-Session Learning Protocol
+## 9. Seller Listing Flow & Multi-Photo Picker Standards
+
+- **Cross-Platform Image Picking**:
+  - Always standardise on official `expo-image-picker` (`launchImageLibraryAsync` with `allowsMultipleSelection: true` and `launchCameraAsync`).
+  - Configure clear, human permissions in `app.json` (`photosPermission` and `cameraPermission`).
+- **Multi-Photo Mobile Ergonomics**:
+  - Limit to 5 photos per item for optimal mobile memory and bandwidth.
+  - Distinct "Cover Photo" badge on index 0 to clearly show the primary marketplace thumbnail.
+  - "Make Cover" and individual deletion buttons directly on thumbnails.
+  - Include quick campus sample photo presets (textbooks, scrubs, calculator, desk lamp) so developers and testers can verify multi-photo flows on simulators without camera hardware.
+- **React 19 Immutability & Stable Counters**:
+  - Never reassign module-level variables (`let counter = 0; counter += 1`) inside async callbacks or event handlers; React Compiler flags this with `react-hooks/immutability`.
+  - Use component-scoped `useRef(0)` to track incremental counters within event handlers.
+- **Progressive 3-Step Listing Flow over Monolithic Forms**:
+  - Never dump 10+ disparate form fields onto a single scrolling mobile screen ("wall of forms" anti-pattern). It creates severe cognitive fatigue and makes navigation difficult.
+  - Divide the listing journey into 3 focused, bite-sized stages:
+    1. **Step 1: Item & Photos** (Hero photo picker, item title, category tile selection, honest condition).
+    2. **Step 2: Pricing & Trade Deal** (Structured deal cards: Cash ₱ with quick presets, Swap barter wishlist, or Freebie Pay-It-Forward gift + description).
+    3. **Step 3: Campus Handover & Review** (Campus switch, safe meetup spot chips, academic context, live CO₂ green impact, and a live marketplace card preview).
+  - Include a clean stepper header with a progress track (`33% → 66% → 100%`) and tap-to-navigate pills for completed steps.
+  - Perform step-level validation so users receive immediate, contextual guidance before advancing.
+- **End-to-End Marketplace Visibility**:
+  - Newly published items must immediately update the global `ItemsContext` so they appear at the top of the Marketplace feed.
+  - Render real `photo.uri` across `ItemCard` and `item/[id].tsx` using `expo-image` with fallback to category vector motifs.
+
+---
+
+## 10. End-of-Session Learning Protocol
 
 - At the conclusion of every session where design feedback, corrections, or user preferences are expressed:
   1. Review user corrections, design constraints, and negative feedback.
