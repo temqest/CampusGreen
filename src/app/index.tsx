@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
+  AppStateStatus,
   Dimensions,
   Easing,
   Pressable,
@@ -10,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Spacing, Radius } from '@/constants/theme';
@@ -35,61 +37,102 @@ export default function MobileWelcomeScreen() {
   // Single unified linear loop driver (0 -> 1)
   // Eliminates loop stutter, phase drift, and boundary discontinuity
   const [loopDriver] = useState(() => new Animated.Value(0));
+  const loopAnimRef = useRef<Animated.CompositeAnimation | null>(null);
+  const isFirstMount = useRef(true);
 
+  // 1. Entrance animation (runs once on first load)
   useEffect(() => {
-    // 1. Entrance animation
-    Animated.sequence([
-      Animated.parallel([
-        Animated.timing(heroFade, {
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(heroFade, {
+            toValue: 1,
+            duration: 500,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(heroScale, {
+            toValue: 1,
+            friction: 7,
+            tension: 45,
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.parallel([
+          Animated.timing(textFade, {
+            toValue: 1,
+            duration: 450,
+            easing: Easing.out(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(textSlide, {
+            toValue: 0,
+            duration: 450,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.timing(buttonFade, {
           toValue: 1,
-          duration: 500,
-          easing: Easing.out(Easing.cubic),
+          duration: 350,
           useNativeDriver: true,
         }),
-        Animated.spring(heroScale, {
-          toValue: 1,
-          friction: 7,
-          tension: 45,
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.parallel([
-        Animated.timing(textFade, {
-          toValue: 1,
-          duration: 450,
-          easing: Easing.out(Easing.quad),
-          useNativeDriver: true,
-        }),
-        Animated.timing(textSlide, {
-          toValue: 0,
-          duration: 450,
-          easing: Easing.out(Easing.cubic),
-          useNativeDriver: true,
-        }),
-      ]),
-      Animated.timing(buttonFade, {
-        toValue: 1,
-        duration: 350,
-        useNativeDriver: true,
-      }),
-    ]).start();
+      ]).start();
+    }
+  }, [buttonFade, heroFade, heroScale, textFade, textSlide]);
 
-    // 2. Perfectly seamless, stutter-free continuous float loop
-    const continuousLoop = Animated.loop(
-      Animated.timing(loopDriver, {
-        toValue: 1,
-        duration: 4000,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
+  // 2. Perfectly seamless, stutter-free continuous float loop
+  // Bound to screen focus: automatically resumes when returning from auth screens
+  useFocusEffect(
+    useCallback(() => {
+      let isFocused = true;
 
-    continuousLoop.start();
+      // Ensure entrance values are fully settled when returning
+      if (!isFirstMount.current) {
+        heroFade.setValue(1);
+        heroScale.setValue(1);
+        textFade.setValue(1);
+        textSlide.setValue(0);
+        buttonFade.setValue(1);
+      }
 
-    return () => {
-      continuousLoop.stop();
-    };
-  }, [buttonFade, heroFade, heroScale, loopDriver, textFade, textSlide]);
+      const startLoop = () => {
+        if (!isFocused) return;
+        if (loopAnimRef.current) {
+          loopAnimRef.current.stop();
+        }
+        loopDriver.setValue(0);
+        const continuousLoop = Animated.loop(
+          Animated.timing(loopDriver, {
+            toValue: 1,
+            duration: 4000,
+            easing: Easing.linear,
+            useNativeDriver: true,
+          })
+        );
+        loopAnimRef.current = continuousLoop;
+        continuousLoop.start();
+      };
+
+      startLoop();
+
+      const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
+        if (nextState === 'active' && isFocused) {
+          startLoop();
+        }
+      });
+
+      return () => {
+        isFocused = false;
+        subscription.remove();
+        if (loopAnimRef.current) {
+          loopAnimRef.current.stop();
+          loopAnimRef.current = null;
+        }
+      };
+    }, [buttonFade, heroFade, heroScale, loopDriver, textFade, textSlide])
+  );
 
   // Interpolate smooth closed-cycle sine wave transforms
   // Every curve starts and ends at the exact same value (0 -> 0 or 1 -> 1), preventing any stutter

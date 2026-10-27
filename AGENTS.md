@@ -50,7 +50,7 @@ Docs: https://docs.expo.dev/eas/index.md
 - **Strictly No Guest Mode**: CampusGreen is a verified student-only community. Never provide guest browsing pathways.
 - **Restraint Over Fluff**: Avoid cluttering screens with fake stats, marketing pills, or unverified claims. Keep copy honest, warm, and concise.
 - **Inviting Vector Hero Motifs**: Do not leave hero sections as empty boxes. Use balanced, warm native vector motifs (like the 3-circle community motif).
-- **Stutter-Free Loop Animations**: Never run desynchronized sequence loops. Always use a single normalized linear driver (`0 → 1`) with closed-cycle interpolation (`0 → -x → 0 → x → 0`) on `useNativeDriver: true`. In React 19, initialize values via `useState(() => new Animated.Value(...))`.
+- **Stutter-Free Loop Animations & Focus Resilience**: Never run desynchronized sequence loops. Always use a single normalized linear driver (`0 → 1`) with closed-cycle interpolation (`0 → -x → 0 → x → 0`) on `useNativeDriver: true`. In React 19, initialize values via `useState(() => new Animated.Value(...))`. On screens in the navigation stack, manage loops via `useFocusEffect` and an `AppState` listener so animations cleanly restart when popping back from pushed screens.
 
 ## End-of-Session Learning Protocol
 

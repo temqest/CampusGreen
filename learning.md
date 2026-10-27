@@ -60,10 +60,11 @@ This document captures project-specific design standards, user preferences, and 
   - Clear app title: `CampusGreen`
   - Welcoming, grounded headline: *"Where campus gear finds a second life."*
   - Concise 1–2 sentence description of what the app actually does.
-- ✅ **Single-Driver Seamless Animations**:
+- ✅ **Single-Driver Seamless Animations & Screen Focus Resumption**:
   - Use **one continuous linear loop driver** (`0 → 1`) running on the native driver (`useNativeDriver: true`).
   - Derive movements via **closed-cycle sinusoidal interpolation** (`[0, 0.25, 0.5, 0.75, 1] → [0, -6, 0, 6, 0]`) so the loop starts and ends at the identical value, eliminating all stutter, velocity jumps, and reset hitches.
   - In React 19, initialize animated values with `useState(() => new Animated.Value(...))` to avoid `Cannot access refs during render` compiler/linter warnings.
+  - **Screen Focus Resilience**: When navigating away to stacked screens (e.g., from landing to auth) and back, `react-native-screens` halts background native driver animations, and `useEffect` does NOT re-run because the screen was never unmounted. Always bind loop animations to `useFocusEffect` (from `expo-router`) with an `AppState` listener. Reset and restart the loop on screen focus, and separate one-shot entrance animations (using an `isFirstMount` ref) so they do not stutter or freeze.
 
 ---
 
