@@ -39,3 +39,16 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Mobile UI & Design Standards (Crucial)
+
+- **Mobile First, Not a Website**: Mobile apps do NOT have website topbars, navigation headers on onboarding, or endless scrolling marketing pages. Keep onboarding to a single, focused viewport with thumb-friendly bottom action buttons.
+- **Zero AI Art**: Never generate or use AI artwork. Construct all visuals using native shapes, clean vector icons (`@expo/vector-icons`), and typography.
+- **Restraint Over Fluff**: Avoid cluttering screens with fake stats, marketing pills, or unverified claims. Keep copy honest, warm, and concise.
+- **Inviting Vector Hero Motifs**: Do not leave hero sections as empty boxes. Use balanced, warm native vector motifs (like the 3-circle community motif).
+- **Stutter-Free Loop Animations**: Never run desynchronized sequence loops. Always use a single normalized linear driver (`0 → 1`) with closed-cycle interpolation (`0 → -x → 0 → x → 0`) on `useNativeDriver: true`. In React 19, initialize values via `useState(() => new Animated.Value(...))`.
+
+## End-of-Session Learning Protocol
+
+- At the end of every session, review any user corrections, design feedback, or architectural constraints and update `learning.md` so that future agent sessions retain and build upon these lessons.
+
