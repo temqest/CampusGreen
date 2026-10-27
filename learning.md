@@ -190,7 +190,31 @@ This document captures project-specific design standards, user preferences, and 
 
 ---
 
-## 10. End-of-Session Learning Protocol
+## 10. Student Profile, Escrow Wallet & Seller Success Growth Tools
+
+- **Escrow Wallet Dual Balance Pattern**:
+  - Avoid confusing total balance figures. Clearly distinguish between **Available for Cash-Out** (cleared funds from completed handovers) and **Locked in Escrow** (funds safely held while buyer inspects item at campus zone).
+  - Explicitly remind students of the 72-hour auto-completion protection window post-meetup.
+- **Philippine E-Wallet Cash-Out Flow**:
+  - Standardize on official channels: **GCash** and **Maya**.
+  - Respect the **Zero Pre-Selection Invariant**: Channel options start unselected (`null`).
+  - Provide quick amount chips (`₱500`, `₱1,000`, `₱2,000`, `Cash Out All`) with instant balance validation and generation of traceable reference IDs (`CG-PO-XXXXXX`).
+  - Highlight ₱0 student transfer fees to encourage in-app campus digital transactions.
+- **Seller Success Growth Hub (Goal #6)**:
+  - **Listing Bumps**: Reposition active items to index 0 of the marketplace discovery feed and refresh `createdAt` to `'Just now'`, giving students organic visibility.
+  - **Urgent Selling Badges**: Strictly dynamic, actionable badges (`#DC2626` / `Urgent`) toggled by students for items needing rapid turnaround before exams, clinical duty rotations, or dorm move-outs. Rendered consistently on both `ItemCard` and `item/[id].tsx`.
+- **Identity & Campus Reputation**:
+  - Showcase institutional `.edu.ph` email verification, university affiliation, degree program, and authentic reputation score (⭐ 4.9 • 24 campus reviews • 100% meetup completion) alongside personal Green Impact metrics (kg CO₂ saved, items reused, ₱ saved).
+
+- **Profile Mental Models & Mobile Navigation Standards**:
+  - **Never put Settings or Ledger into Content Tabs**: Tabs must strictly partition user inventory and transactions (`Active Listings`, `Sold`, `My Orders`). Settings, preferences, and security belong in native grouped list rows at the base of the view or via a top-right header gear icon.
+  - **Thumb-Friendly Cash-Out Action Dock**: The "Cash Out Funds" CTA must be a prominent, full-width button docked cleanly inside or below the Escrow Wallet card with generous vertical padding, never a cramped pill next to balance headers.
+  - **Bottom Dock Safety Margin**: Always apply generous bottom padding (`paddingBottom: insets.bottom + 110`) so the bottom-most list items, logout buttons, and floating tab bar never overlap or cause clipped touch targets.
+  - **Modal Auxiliary Sheets for Complex Actions**: Keep the main profile page uncluttered by housing secondary flows (Escrow Ledger history, Cash-Out transfer forms, Meetup Spot selector) in bottom-sliding modal sheets.
+
+---
+
+## 11. End-of-Session Learning Protocol
 
 - At the conclusion of every session where design feedback, corrections, or user preferences are expressed:
   1. Review user corrections, design constraints, and negative feedback.

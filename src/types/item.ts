@@ -44,9 +44,40 @@ export interface MarketplaceItem {
   sellerYear: string;
   isVerifiedStudent: boolean;
   isReserved?: boolean;
+  isUrgent?: boolean; // Seller growth tool: Urgent Selling Badge
+  bumpCount?: number; // Seller growth tool: Listing Bumps count
+  lastBumpedAt?: string;
+  viewsCount?: number;
+  inquiriesCount?: number;
+  status?: 'active' | 'reserved' | 'sold';
   createdAt: string;
   imageUrl?: string;
   photos?: ItemPhoto[];
   description: string;
   estimatedCo2SavedKg: number;
+}
+
+export type EscrowTransactionType =
+  | 'incoming_escrow'
+  | 'escrow_release'
+  | 'cash_out';
+
+export interface EscrowTransaction {
+  id: string;
+  type: EscrowTransactionType;
+  title: string;
+  amount: number;
+  date: string;
+  status: 'pending' | 'completed' | 'processing';
+  referenceCode: string;
+  channel?: 'gcash' | 'maya';
+  notes?: string;
+  counterpartName?: string;
+}
+
+export interface WalletState {
+  availableBalance: number;
+  inEscrowBalance: number;
+  totalEarned: number;
+  transactions: EscrowTransaction[];
 }

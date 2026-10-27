@@ -30,9 +30,13 @@ Create a trusted, verified, student-to-student platform for exchanging school it
 5. **Convenient and Secure Payments**
    - Support local digital wallets (GCash and Maya) alongside cash on physical meetups.
    - Provide optional Buyer Protection through escrow, holding funds until the buyer confirms receipt and the item's condition.
+   - Centralize escrow funds in the Student Profile **Escrow Wallet & Cash-Out Hub**, allowing instant withdrawals to GCash and Maya with zero transaction fees for verified students.
 
 6. **Seller Success**
-   - Give sellers growth tools such as listing bumps and Urgent Selling badges to increase visibility.
+   - Provide a dedicated Seller Hub within the Student Profile featuring growth tools to accelerate campus trades.
+   - Empower sellers with **Listing Bumps** to boost active items back to the top of the discovery feed.
+   - Enable **Urgent Selling Badges** to maximize visibility for students needing fast turnarounds before exams, clinical rotations, or dorm move-outs.
+   - Surface real-time listing analytics (views, inquiries, basket saves) to help students manage price and demand.
 
 ## Target Users
 

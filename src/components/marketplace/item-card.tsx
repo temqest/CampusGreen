@@ -129,6 +129,14 @@ export function ItemCard({ item }: ItemCardProps) {
           )}
         </View>
 
+        {/* Dynamic Urgent Selling Badge (Goal #6) */}
+        {item.isUrgent && (
+          <View style={[styles.urgentBadgeTopRight, { backgroundColor: '#DC2626' }]}>
+            <Ionicons name="flash" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+            <Text style={styles.urgentBadgeText}>Urgent</Text>
+          </View>
+        )}
+
         {/* Reserved badge if applicable */}
         {item.isReserved && (
           <View style={[styles.reservedOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.6)' }]}>
@@ -239,6 +247,23 @@ const styles = StyleSheet.create({
   dealBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  urgentBadgeTopRight: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+  },
+  urgentBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   reservedOverlay: {
     position: 'absolute',

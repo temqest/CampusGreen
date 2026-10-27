@@ -136,6 +136,16 @@ export default function ItemDetailScreen() {
 
           {/* Floating Deal / Price Tag at bottom right of the hero */}
           <View style={styles.heroDealTagContainer}>
+            {item.isUrgent && (
+              <View
+                style={[
+                  styles.heroDealBadge,
+                  { backgroundColor: '#DC2626', marginRight: 6 },
+                ]}>
+                <Ionicons name="flash" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
+                <Text style={styles.heroDealText}>Urgent</Text>
+              </View>
+            )}
             {item.tradeType === 'buy' && (
               <View
                 style={[
@@ -630,6 +640,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 14,
     right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
     zIndex: 5,
   },
   heroDealBadge: {
