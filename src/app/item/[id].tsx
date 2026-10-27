@@ -459,31 +459,82 @@ export default function ItemDetailScreen() {
             paddingBottom: Math.max(insets.bottom, 12),
           },
         ]}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Contact seller"
-          style={({ pressed }) => [
-            styles.primaryCta,
-            {
-              backgroundColor: theme.primary,
-              opacity: pressed ? 0.88 : 1,
-            },
-          ]}
-          onPress={() =>
-            router.push({
-              pathname: '/chat/[id]',
-              params: { id: item.id },
-            })
-          }>
-          <Ionicons name="chatbubbles-outline" size={18} color="#FFFFFF" />
-          <Text style={styles.primaryCtaText}>
-            {item.tradeType === 'swap'
-              ? 'Propose Swap Trade'
-              : item.tradeType === 'free'
-              ? 'Request Freebie'
-              : 'Chat with Seller'}
-          </Text>
-        </Pressable>
+        {item.tradeType === 'buy' && item.price !== null && item.price > 0 ? (
+          <View style={styles.dockRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Chat with seller"
+              style={({ pressed }) => [
+                styles.chatSecondaryButton,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderColor: theme.border,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: '/chat/[id]',
+                  params: { id: item.id },
+                })
+              }>
+              <Ionicons
+                name="chatbubbles-outline"
+                size={20}
+                color={theme.text}
+              />
+            </Pressable>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Pay now ₱${item.price}`}
+              style={({ pressed }) => [
+                styles.primaryCta,
+                styles.primaryCtaFlex,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: pressed ? 0.88 : 1,
+                },
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: '/payment/[id]',
+                  params: { id: item.id },
+                })
+              }>
+              <Ionicons name="card-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryCtaText}>
+                Pay Now • ₱{item.price}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={
+              item.tradeType === 'swap' ? 'Propose swap trade' : 'Request freebie'
+            }
+            style={({ pressed }) => [
+              styles.primaryCta,
+              {
+                backgroundColor: theme.primary,
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+            onPress={() =>
+              router.push({
+                pathname: '/chat/[id]',
+                params: { id: item.id },
+              })
+            }>
+            <Ionicons name="chatbubbles-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.primaryCtaText}>
+              {item.tradeType === 'swap'
+                ? 'Propose Swap Trade'
+                : 'Request Freebie'}
+            </Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -830,5 +881,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '700',
+  },
+  dockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  chatSecondaryButton: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryCtaFlex: {
+    flex: 1,
   },
 });

@@ -106,7 +106,35 @@ This document captures project-specific design standards, user preferences, and 
 
 ---
 
-## 6. End-of-Session Learning Protocol
+## 6. Checkout & Student Payment Standards
+
+- **Context-Aware Bottom Action Dock**:
+  - For items that cost money (`tradeType === 'buy' && price > 0`), the primary CTA must clearly show the financial commitment and flow: `Pay Now • ₱{item.price}`, paired with a secondary icon button for quick seller chat inquiry.
+  - For swap or free items, preserve direct communication CTAs: `Propose Swap Trade` or `Request Freebie`.
+- **Philippine Student Payment Channels (GCash, Maya, QR Ph)**:
+  - Standardize on official national channels: **GCash** (e-wallet), **Maya** (digital bank & wallet), and **QR Ph** (universal national interoperable QR standard).
+  - Respect official brand identities with tailored logo containers (e.g. sleek dark container for Maya's `#2FF19E` neon green logo to ensure maximum visual contrast; clean white/bordered containers for GCash and QR Ph).
+  - Follow the **Zero Pre-Selection Invariant**: Payment methods must never be pre-selected; initialize to `null` so students explicitly and deliberately choose their payment channel.
+- **Escrow-First Peace of Mind**:
+  - Emphasize campus escrow protection: student payments are locked safely in escrow and only released to the seller after in-person inspection at the designated safe campus meetup spot (`item.safeMeetupSpot`).
+- **Authentic QR Code Generation**:
+  - Always render real, scannable QR matrices via `react-native-qrcode-svg` with `react-native-svg` instead of mock CSS/vector approximations.
+  - Encode structured, verifiable payment payloads (e.g. item ID, seller, safe meetup zone, escrow status, and price) accompanied by official BSP/QR Ph national standard badges and merchant metadata.
+- **Zero Website Topbar Layouts (App-Wide)**:
+  - Enforce `screenOptions={{ headerShown: false }}` on root Stack navigators so no screen inherits browser/web navigation bars.
+  - Never render full-width navbar strips with bottom borders on standalone mobile views. Use floating circular back buttons in the top-left corner and organic in-page headings.
+- **Strict Color Contrast Harmony on Action Buttons**:
+  - Solid primary action buttons (`theme.primary` dark forest green) must consistently pair with `#FFFFFF` vector icons AND `#FFFFFF` typography.
+  - Never omit explicit text color tokens on primary buttons to prevent platform default text from falling back to black on dark backgrounds.
+- **Scroll Clearance for Pinned Multi-Action Docks**:
+  - Whenever a screen features a multi-button pinned bottom dock (e.g. primary + secondary action buttons with ~140–150px total height), `ScrollView`'s `contentContainerStyle` must provide `paddingBottom: insets.bottom + 160` to `170` minimum.
+  - Insufficient bottom padding clips the lowest card (e.g., meetup location, safety guidelines) behind the sticky dock.
+- **72-Hour Auto-Completion Escrow Disclaimer**:
+  - Always inform the buyer on the payment confirmation/escrow screen that following seller handover at the meetup spot, an automated 72-hour inspection window applies: if the buyer fails to respond or raise a dispute within 72 hours, the platform automatically completes the order without issue and releases payment to the seller.
+
+---
+
+## 7. End-of-Session Learning Protocol
 
 - At the conclusion of every session where design feedback, corrections, or user preferences are expressed:
   1. Review user corrections, design constraints, and negative feedback.
