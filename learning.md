@@ -87,9 +87,29 @@ This document captures project-specific design standards, user preferences, and 
 
 ---
 
-## 5. End-of-Session Learning Protocol
+## 5. Marketplace & Discovery Standards
+
+- **E-Wallet Balance Pattern for Green Impact Counter**:
+  - Rather than treating sustainability stats as a web marketing banner, integrate it like an e-wallet balance card (e.g., GCash / Maya account balance) at the top of the mobile marketplace feed.
+  - Presents authentic, grounded metrics: **Carbon Emissions Saved (`kg CO₂e`)**, **Waste Diverted (`kg`)**, and **Student Money Saved (`₱`)**.
+  - Provides a clean toggle between **Campus Total** and **My Contribution** so students feel personal ownership of their campus carbon reduction.
+  - Keeps card geometry compact with rounded corners (`Radius.lg`), deep forest academic tones (`#18482D` / `#1F5C3A`), and native vector leaf glyphs (`leaf-outline`), strictly avoiding celebratory sparkles or decorative pill noise.
+- **Responsive 2-Column Discovery Grid**:
+  - Use `FlatList` with `numColumns={2}` for the marketplace feed to optimize browsing speed and thumbnail preview on mobile viewports.
+  - Actionable Dynamic Badges ONLY: Badges on cards are strictly reserved for dynamic transaction state (`₱350`, `Swap`, `Free`, `Reserved`). No decorative tag filler.
+  - Include course and safe meetup spot context on each card (e.g. `BS Nursing • Yr 2` and `📍 Main Library Ground Floor`).
+- **Clean Slate Discovery Hierarchy**:
+  - Category and deal-type filters must start unselected (`null`).
+  - Combining a neutral "All Categories" chip + individual category toggles ensures users make deliberate choices without default bias.
+- **Strictly Typed TabBarIcon Props**:
+  - In React Navigation tabs with TypeScript, avoid passing raw `color` from bottom-tabs renderer directly into Vector Icons props if internal color types include null; use explicitly typed theme tokens (`focused ? theme.primary : theme.textMuted`).
+
+---
+
+## 6. End-of-Session Learning Protocol
 
 - At the conclusion of every session where design feedback, corrections, or user preferences are expressed:
   1. Review user corrections, design constraints, and negative feedback.
   2. Extract universal principles (app-wide rules) rather than narrow screen-specific fixes.
   3. Update `learning.md` so that future agent sessions retain and build upon these lessons.
+
