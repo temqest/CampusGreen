@@ -237,16 +237,6 @@ export default function MobileWelcomeScreen() {
           ]}>
           <Text style={[styles.secondaryButtonText, { color: theme.text }]}>Log In</Text>
         </Pressable>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Explore as guest"
-          onPress={() => router.push('/(tabs)/marketplace')}
-          style={styles.guestButton}>
-          <Text style={[styles.guestButtonText, { color: theme.textSecondary }]}>
-            Explore as Guest
-          </Text>
-        </Pressable>
       </Animated.View>
     </SafeAreaView>
   );
@@ -387,13 +377,5 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     fontSize: 15,
     fontWeight: '600',
-  },
-  guestButton: {
-    paddingVertical: Spacing.two,
-    paddingHorizontal: Spacing.four,
-  },
-  guestButtonText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
 });

@@ -43,7 +43,11 @@ Docs: https://docs.expo.dev/eas/index.md
 ## Mobile UI & Design Standards (Crucial)
 
 - **Mobile First, Not a Website**: Mobile apps do NOT have website topbars, navigation headers on onboarding, or endless scrolling marketing pages. Keep onboarding to a single, focused viewport with thumb-friendly bottom action buttons.
-- **Zero AI Art**: Never generate or use AI artwork. Construct all visuals using native shapes, clean vector icons (`@expo/vector-icons`), and typography.
+- **Zero AI Art & Zero Sparkles**: Never generate or use AI artwork. Avoid sparkle icons, celebratory emoji clutter, and decorative visual noise. Construct all visuals using native shapes, clean vector icons (`@expo/vector-icons`), and typography.
+- **Zero Decorative Badges / Pills**: Badges are strictly reserved for dynamic, actionable item or transaction state (e.g., "Reserved", "Pending Pickup"). Never sprinkle pills or status tags as decorative filler or section headers.
+- **Thumb Zone Ergonomics**: Center short forms vertically (`centerWrapper: { flex: 1, justifyContent: 'center' }`) so inputs and primary CTAs sit in the natural thumb arc. Place secondary/SSO actions (like Google Sign-In) at the bottom. Never use `justifyContent: 'space-between'` on scrollable views.
+- **Zero Pre-Selection Invariant**: Options, filters, and onboarding preferences must never be auto-selected or pre-checked by default. Initialize to empty (`[]`, `''`) and let users deliberately choose.
+- **Strictly No Guest Mode**: CampusGreen is a verified student-only community. Never provide guest browsing pathways.
 - **Restraint Over Fluff**: Avoid cluttering screens with fake stats, marketing pills, or unverified claims. Keep copy honest, warm, and concise.
 - **Inviting Vector Hero Motifs**: Do not leave hero sections as empty boxes. Use balanced, warm native vector motifs (like the 3-circle community motif).
 - **Stutter-Free Loop Animations**: Never run desynchronized sequence loops. Always use a single normalized linear driver (`0 → 1`) with closed-cycle interpolation (`0 → -x → 0 → x → 0`) on `useNativeDriver: true`. In React 19, initialize values via `useState(() => new Animated.Value(...))`.
@@ -51,4 +55,5 @@ Docs: https://docs.expo.dev/eas/index.md
 ## End-of-Session Learning Protocol
 
 - At the end of every session, review any user corrections, design feedback, or architectural constraints and update `learning.md` so that future agent sessions retain and build upon these lessons.
+
 
