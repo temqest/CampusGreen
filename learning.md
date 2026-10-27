@@ -151,7 +151,21 @@ This document captures project-specific design standards, user preferences, and 
 
 ---
 
-## 8. End-of-Session Learning Protocol
+## 8. Peer Chat Confirmation for Trades & Freebies
+
+- **Interactive Agreement Cards in Non-Monetary Chats**:
+  - For `swap` and `free` items where escrow checkout is not applicable, render an interactive agreement card directly at the head of the chat feed.
+  - Card details:
+    - **Swap (Barter)**: Lists the proposed exchange (e.g. Drafting Board ⇄ Desk Study Lamp) and the campus safe meetup zone.
+    - **Freebie (Pay-It-Forward)**: Explicitly notes ₱0.00 student gift and the pickup spot.
+  - **Single-Tap Confirmation Button**:
+    - Interactive button (`"Accept Swap Trade"` or `"Confirm Freebie Acceptance"`).
+    - Tapping executes an optimistic state update to `'accepted'`, generates a unique campus handover pass (e.g. `PASS #SWAP-8492` or `PASS #FREE-3201`), and appends a system milestone message to the chat history.
+    - Once students meet at the safe campus zone, provides a secondary `"Mark Handover Complete"` CTA to finalize the transaction.
+
+---
+
+## 9. End-of-Session Learning Protocol
 
 - At the conclusion of every session where design feedback, corrections, or user preferences are expressed:
   1. Review user corrections, design constraints, and negative feedback.

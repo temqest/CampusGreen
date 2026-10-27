@@ -13,13 +13,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
+type ChatFilter = 'all' | 'swap' | 'free' | 'buy';
+
 interface ChatConversation {
   id: string;
   itemId: string;
   sellerName: string;
   sellerYear: string;
   itemTitle: string;
-  price: number;
+  price: number | null;
+  tradeType: 'buy' | 'swap' | 'free';
   lastMessage: string;
   timestamp: string;
   unreadCount: number;
@@ -28,40 +31,56 @@ interface ChatConversation {
 
 const MOCK_CONVERSATIONS: ChatConversation[] = [
   {
-    id: 'conv-1',
+    id: 'conv-swap',
+    itemId: '4',
+    sellerName: 'Paolo Reyes',
+    sellerYear: '3rd Year Arch',
+    itemTitle: 'Drafting Board (24x36) with Rotring T-Square',
+    price: null,
+    tradeType: 'swap',
+    lastMessage: 'I’d love to swap for the desk study lamp! Tap accept to confirm trade.',
+    timestamp: '10m ago',
+    unreadCount: 1,
+    safeMeetupSpot: 'EA Building Security Guard Post',
+  },
+  {
+    id: 'conv-free',
+    itemId: '3',
+    sellerName: 'Bea Dimaculangan',
+    sellerYear: '2nd Year BSBA',
+    itemTitle: 'Pay-It-Forward: GenEd Reviewers & Readings Bundle',
+    price: null,
+    tradeType: 'free',
+    lastMessage: 'The reviewers are all set for you! Tap accept to confirm reservation.',
+    timestamp: '25m ago',
+    unreadCount: 1,
+    safeMeetupSpot: 'Student Pavilion (Gazebo Area)',
+  },
+  {
+    id: 'conv-buy-1',
     itemId: '1',
     sellerName: 'Maria Santos',
     sellerYear: '3rd Year BSN',
     itemTitle: 'AdNU College of Nursing Scrubs Set (Size M)',
     price: 350,
+    tradeType: 'buy',
     lastMessage: 'Sure! Let’s meet at Burns Hall lobby tomorrow around 2:30 PM.',
-    timestamp: '15m ago',
-    unreadCount: 1,
+    timestamp: '1h ago',
+    unreadCount: 0,
     safeMeetupSpot: 'Nursing Bldg Lobby (Burns Hall)',
   },
   {
-    id: 'conv-2',
+    id: 'conv-buy-2',
     itemId: '2',
     sellerName: 'Kenzo Alcantara',
     sellerYear: '4th Year BSCE',
     itemTitle: 'Casio FX-991EX ClassWiz Scientific Calculator',
     price: 850,
+    tradeType: 'buy',
     lastMessage: 'PRC board seal is completely intact. Can bring it to Main Library anytime today.',
-    timestamp: '1h ago',
+    timestamp: '3h ago',
     unreadCount: 0,
     safeMeetupSpot: 'Main Library Ground Floor',
-  },
-  {
-    id: 'conv-3',
-    itemId: '3',
-    sellerName: 'Sofia Reyes',
-    sellerYear: '2nd Year BS Bio',
-    itemTitle: 'Campbell Biology 12th Edition Hardbound',
-    price: 750,
-    lastMessage: 'I accepted your reservation! You can checkout with Escrow or Maya.',
-    timestamp: 'Yesterday',
-    unreadCount: 0,
-    safeMeetupSpot: 'Science Bldg Atrium',
   },
 ];
 
@@ -70,13 +89,24 @@ export default function ChatInboxScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
 
-  const filteredConversations = MOCK_CONVERSATIONS.filter(
-    (c) =>
+  const filteredConversations = MOCK_CONVERSATIONS.filter((c) => {
+    const matchesFilter =
+      activeFilter === 'all' ? true : c.tradeType === activeFilter;
+    const matchesSearch =
       c.sellerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.itemTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
+  const filterTabs: { id: ChatFilter; label: string }[] = [
+    { id: 'all', label: 'All' },
+    { id: 'swap', label: 'Trades (Swap)' },
+    { id: 'free', label: 'Freebies' },
+    { id: 'buy', label: 'Purchases' },
+  ];
 
   return (
     <View
@@ -149,6 +179,41 @@ export default function ChatInboxScreen() {
               )}
             </View>
 
+            {/* Filter Tabs Row */}
+            <View style={styles.filterRow}>
+              {filterTabs.map((tab) => {
+                const isSelected = activeFilter === tab.id;
+                return (
+                  <Pressable
+                    key={tab.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Filter by ${tab.label}`}
+                    style={({ pressed }) => [
+                      styles.filterChip,
+                      {
+                        backgroundColor: isSelected
+                          ? theme.primary
+                          : theme.surface,
+                        borderColor: isSelected ? theme.primary : theme.border,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                    ]}
+                    onPress={() => setActiveFilter(tab.id)}>
+                    <Text
+                      style={[
+                        styles.filterChipText,
+                        {
+                          color: isSelected ? '#FFFFFF' : theme.textSecondary,
+                          fontWeight: isSelected ? '700' : '500',
+                        },
+                      ]}>
+                      {tab.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             {/* In-Feed Safety Reminder Note */}
             <View
               style={[
@@ -181,6 +246,9 @@ export default function ChatInboxScreen() {
             .join('')
             .toUpperCase();
 
+          const isSwap = item.tradeType === 'swap';
+          const isFree = item.tradeType === 'free';
+
           return (
             <Pressable
               accessibilityRole="button"
@@ -200,7 +268,7 @@ export default function ChatInboxScreen() {
                     id: item.itemId,
                     sellerName: item.sellerName,
                     itemTitle: item.itemTitle,
-                    price: item.price.toString(),
+                    price: item.price !== null ? item.price.toString() : '0',
                   },
                 })
               }>
@@ -208,7 +276,7 @@ export default function ChatInboxScreen() {
               <View
                 style={[
                   styles.avatar,
-                  { backgroundColor: theme.primaryLight },
+                  { backgroundColor: theme.surfaceSubtle },
                 ]}>
                 <Text style={[styles.avatarText, { color: theme.primary }]}>
                   {initials}
@@ -236,12 +304,25 @@ export default function ChatInboxScreen() {
                   </Text>
                 </View>
 
-                {/* Item label */}
-                <Text
-                  numberOfLines={1}
-                  style={[styles.itemSnippet, { color: theme.textSecondary }]}>
-                  {item.itemTitle} · ₱{item.price}
-                </Text>
+                {/* Item label with deal-type contextual tag */}
+                <View style={styles.itemTagRow}>
+                  <Ionicons
+                    name={
+                      isSwap
+                        ? 'repeat'
+                        : isFree
+                        ? 'gift-outline'
+                        : 'pricetag-outline'
+                    }
+                    size={13}
+                    color={theme.primary}
+                  />
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.itemSnippet, { color: theme.textSecondary }]}>
+                    {item.itemTitle}
+                  </Text>
+                </View>
 
                 {/* Last message and unread badge */}
                 <View style={styles.messageRow}>
@@ -290,7 +371,8 @@ export default function ChatInboxScreen() {
                 styles.emptySubtitle,
                 { color: theme.textSecondary },
               ]}>
-              Ask sellers questions or coordinate meetups right from item pages.
+              Ask sellers questions, propose trades, or request freebies right
+              from item pages.
             </Text>
           </View>
         }
@@ -339,6 +421,21 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     height: '100%',
+  },
+  filterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+    paddingVertical: Spacing.one,
+  },
+  filterChip: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  filterChipText: {
+    fontSize: 12,
   },
   safetyTipCard: {
     flexDirection: 'row',
@@ -394,9 +491,15 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: 11,
   },
+  itemTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   itemSnippet: {
     fontSize: 12,
     fontWeight: '500',
+    flex: 1,
   },
   messageRow: {
     flexDirection: 'row',
