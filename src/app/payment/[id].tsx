@@ -13,25 +13,25 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import QRCode from 'react-native-qrcode-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useItems } from '@/context/items-context';
 import { MOCK_ITEMS } from '@/data/mock-items';
 
-type PaymentMethod = 'gcash' | 'maya' | 'qrph';
+type PaymentMethod = 'cod' | 'gcash' | 'maya';
 
 const GCASH_LOGO = require('@/assets/gcash.svg');
 const MAYA_LOGO = require('@/assets/maya.svg');
-const QRPH_LOGO = require('@/assets/qr-ph.svg');
 
 export default function PaymentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { items } = useItems();
 
-  const item = MOCK_ITEMS.find((i) => i.id === id) || MOCK_ITEMS[0];
+  const item = items.find((i) => i.id === id) || MOCK_ITEMS.find((i) => i.id === id) || MOCK_ITEMS[0];
   const itemPrice = item.price ?? 0;
 
   // Zero Pre-Selection Invariant: Options must start unselected (null)
@@ -54,20 +54,21 @@ export default function PaymentScreen() {
     setPaymentState('processing');
 
     setTimeout(() => {
-      const code = 'CG-ESC-' + Math.floor(100000 + Math.random() * 900000);
+      const prefix = selectedMethod === 'cod' ? 'CG-COD-' : 'CG-ESC-';
+      const code = prefix + Math.floor(100000 + Math.random() * 900000);
       setReferenceCode(code);
       setPaymentState('success');
-    }, 1200);
+    }, 1000);
   };
 
   const getMethodDisplayName = (method: PaymentMethod | null) => {
     switch (method) {
+      case 'cod':
+        return 'Cash on Delivery';
       case 'gcash':
         return 'GCash';
       case 'maya':
         return 'Maya';
-      case 'qrph':
-        return 'QR Ph';
       default:
         return '';
     }
@@ -103,12 +104,15 @@ export default function PaymentScreen() {
             </View>
 
             <Text style={[styles.successTitle, { color: theme.text }]}>
-              Payment Secured in Escrow
+              {selectedMethod === 'cod'
+                ? 'Order Reserved for Campus Pickup'
+                : 'Payment Secured in Escrow'}
             </Text>
             <Text
               style={[styles.successSubtitle, { color: theme.textSecondary }]}>
-              ₱{itemPrice.toLocaleString()} is safely held by CampusGreen until
-              you meet {item.sellerName} and confirm item inspection.
+              {selectedMethod === 'cod'
+                ? `Your order is reserved with ${item.sellerName}. Prepare ₱${itemPrice.toLocaleString()} in exact cash to pay in person upon inspecting the item at ${item.safeMeetupSpot}.`
+                : `₱${itemPrice.toLocaleString()} is safely held by CampusGreen until you meet ${item.sellerName} and confirm item inspection.`}
             </Text>
           </View>
 
@@ -169,7 +173,7 @@ export default function PaymentScreen() {
 
             <View style={styles.receiptRow}>
               <Text style={[styles.receiptLabelBold, { color: theme.text }]}>
-                Total Held in Escrow
+                {selectedMethod === 'cod' ? 'Total Cash on Delivery' : 'Total Held in Escrow'}
               </Text>
               <Text style={[styles.receiptTotalValue, { color: theme.primary }]}>
                 ₱{itemPrice.toLocaleString()}
@@ -461,11 +465,100 @@ export default function PaymentScreen() {
             Select Payment Option
           </Text>
           <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>
-            Tap your preferred Philippine e-wallet or banking method
+            Choose Cash on Delivery or your preferred Philippine e-wallet
           </Text>
         </View>
 
-        {/* OPTION 1: GCash */}
+        {/* OPTION 1: Cash on Delivery (COD) */}
+        <Pressable
+          accessibilityRole="radio"
+          accessibilityLabel="Pay with Cash on Delivery"
+          accessibilityState={{ checked: selectedMethod === 'cod' }}
+          style={({ pressed }) => [
+            styles.paymentOptionCard,
+            {
+              backgroundColor: theme.surface,
+              borderColor:
+                selectedMethod === 'cod'
+                  ? theme.primary
+                  : theme.border,
+              borderWidth: selectedMethod === 'cod' ? 2 : 1,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+          onPress={() => handleSelectMethod('cod')}>
+          <View style={styles.optionHeaderRow}>
+            <View style={[styles.codLogoWrapper, { backgroundColor: theme.badgeGreenBg }]}>
+              <Ionicons name="cash-outline" size={24} color={theme.primary} />
+            </View>
+
+            <View style={styles.optionTextColumn}>
+              <View style={styles.optionTitleRow}>
+                <Text style={[styles.optionTitle, { color: theme.text }]}>
+                  Cash on Delivery (Meetup Handover)
+                </Text>
+              </View>
+              <Text
+                style={[
+                  styles.optionSubtitle,
+                  { color: theme.textSecondary },
+                ]}>
+                Pay with exact cash in person upon inspecting the item
+              </Text>
+            </View>
+
+            {/* Custom Radio Button */}
+            <View
+              style={[
+                styles.radioOuter,
+                {
+                  borderColor:
+                    selectedMethod === 'cod'
+                      ? theme.primary
+                      : theme.border,
+                },
+              ]}>
+              {selectedMethod === 'cod' && (
+                <View
+                  style={[
+                    styles.radioInner,
+                    { backgroundColor: theme.primary },
+                  ]}
+                />
+              )}
+            </View>
+          </View>
+
+          {/* COD Sub-Details */}
+          {selectedMethod === 'cod' && (
+            <View
+              style={[
+                styles.codDetailsCard,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderColor: theme.border,
+                },
+              ]}>
+              <View style={styles.codDetailsHeader}>
+                <Ionicons name="information-circle-outline" size={17} color={theme.primary} />
+                <Text style={[styles.codDetailsTitle, { color: theme.text }]}>
+                  Meetup Cash Handover Instructions
+                </Text>
+              </View>
+              <Text style={[styles.codDetailsText, { color: theme.textSecondary }]}>
+                • Please prepare exact cash (₱{itemPrice.toLocaleString()}) for smooth campus handover.
+              </Text>
+              <Text style={[styles.codDetailsText, { color: theme.textSecondary }]}>
+                • Inspect the item thoroughly at {item.safeMeetupSpot} before handing over cash.
+              </Text>
+              <Text style={[styles.codDetailsText, { color: theme.textSecondary }]}>
+                • Zero advance payment required. You and {item.sellerName} confirm receipt in-app.
+              </Text>
+            </View>
+          )}
+        </Pressable>
+
+        {/* OPTION 2: GCash */}
         <Pressable
           accessibilityRole="radio"
           accessibilityLabel="Pay with GCash"
@@ -579,7 +672,7 @@ export default function PaymentScreen() {
           )}
         </Pressable>
 
-        {/* OPTION 2: Maya */}
+        {/* OPTION 3: Maya */}
         <Pressable
           accessibilityRole="radio"
           accessibilityLabel="Pay with Maya"
@@ -693,131 +786,6 @@ export default function PaymentScreen() {
             </View>
           )}
         </Pressable>
-
-        {/* OPTION 3: QR Ph */}
-        <Pressable
-          accessibilityRole="radio"
-          accessibilityLabel="Pay with QR Ph"
-          accessibilityState={{ checked: selectedMethod === 'qrph' }}
-          style={({ pressed }) => [
-            styles.paymentOptionCard,
-            {
-              backgroundColor: theme.surface,
-              borderColor:
-                selectedMethod === 'qrph'
-                  ? theme.primary
-                  : theme.border,
-              borderWidth: selectedMethod === 'qrph' ? 2 : 1,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-          onPress={() => handleSelectMethod('qrph')}>
-          <View style={styles.optionHeaderRow}>
-            <View style={styles.qrphLogoWrapper}>
-              <Image
-                source={QRPH_LOGO}
-                style={styles.qrphLogoImage}
-                contentFit="contain"
-              />
-            </View>
-
-            <View style={styles.optionTextColumn}>
-              <View style={styles.optionTitleRow}>
-                <Text style={[styles.optionTitle, { color: theme.text }]}>
-                  QR Ph National Standard
-                </Text>
-              </View>
-              <Text
-                style={[
-                  styles.optionSubtitle,
-                  { color: theme.textSecondary },
-                ]}>
-                Scan with ANY Philippine banking or e-wallet app
-              </Text>
-            </View>
-
-            {/* Custom Radio Button */}
-            <View
-              style={[
-                styles.radioOuter,
-                {
-                  borderColor:
-                    selectedMethod === 'qrph'
-                      ? theme.primary
-                      : theme.border,
-                },
-              ]}>
-              {selectedMethod === 'qrph' && (
-                <View
-                  style={[
-                    styles.radioInner,
-                    { backgroundColor: theme.primary },
-                  ]}
-                />
-              )}
-            </View>
-          </View>
-
-          {/* QR Ph Expanded Vector QR Container */}
-          {selectedMethod === 'qrph' && (
-            <View style={styles.qrExpandedContainer}>
-              <Text style={[styles.qrInstructionHeading, { color: theme.text }]}>
-                Campus Escrow QR Code
-              </Text>
-              <Text
-                style={[styles.qrInstructionSub, { color: theme.textSecondary }]}>
-                Open GCash, Maya, BDO, BPI, UnionBank, RCBC, GoTyme or SeaBank
-                and scan below.
-              </Text>
-
-              {/* Dynamic Real QR Code Frame */}
-              <View
-                style={[
-                  styles.qrCodeFrame,
-                  {
-                    backgroundColor: '#FFFFFF',
-                    borderColor: theme.border,
-                  },
-                ]}>
-                <View style={styles.qrHeaderRow}>
-                  <Image
-                    source={QRPH_LOGO}
-                    style={styles.qrTopLogo}
-                    contentFit="contain"
-                  />
-                  <View style={styles.qrStandardBadge}>
-                    <Text style={styles.qrStandardBadgeText}>BSP COMPLIANT</Text>
-                  </View>
-                </View>
-
-                {/* Real QR Code Maker Component */}
-                <View style={styles.realQrBox}>
-                  <QRCode
-                    value={`https://pay.campusgreen.ph/escrow?ref=CG-QRPH-${item.id}-${itemPrice}&merchant=CampusGreen&amt=${itemPrice}`}
-                    size={176}
-                    color="#0F172A"
-                    backgroundColor="#FFFFFF"
-                    ecl="M"
-                  />
-                </View>
-
-                {/* QR Metadata */}
-                <View style={styles.qrMetadataRow}>
-                  <Text style={styles.qrMerchantText}>
-                    CAMPUSGREEN • {item.sellerName.toUpperCase()}
-                  </Text>
-                  <Text style={styles.qrAmountText}>
-                    ₱{itemPrice.toLocaleString()}
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={[styles.qrExpiryNote, { color: theme.textMuted }]}>
-                Valid for 15 minutes • Single-use secure student transaction
-              </Text>
-            </View>
-          )}
-        </Pressable>
       </ScrollView>
 
       {/* Pinned Bottom Thumb Dock */}
@@ -833,9 +801,11 @@ export default function PaymentScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
-            selectedMethod
+            selectedMethod === 'cod'
+              ? `Confirm Cash on Delivery for ₱${itemPrice.toLocaleString()}`
+              : selectedMethod
               ? `Pay ₱${itemPrice.toLocaleString()} with ${getMethodDisplayName(selectedMethod)}`
-              : 'Select a payment method'
+              : 'Select a payment option'
           }
           disabled={!selectedMethod || paymentState === 'processing'}
           style={({ pressed }) => [
@@ -855,7 +825,13 @@ export default function PaymentScreen() {
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (
             <Ionicons
-              name={selectedMethod ? 'shield-checkmark' : 'lock-closed-outline'}
+              name={
+                selectedMethod === 'cod'
+                  ? 'cash-outline'
+                  : selectedMethod
+                  ? 'shield-checkmark'
+                  : 'lock-closed-outline'
+              }
               size={18}
               color={selectedMethod ? '#FFFFFF' : theme.textMuted}
             />
@@ -866,10 +842,14 @@ export default function PaymentScreen() {
               { color: selectedMethod ? '#FFFFFF' : theme.textMuted },
             ]}>
             {paymentState === 'processing'
-              ? 'Securing Escrow Payment...'
+              ? selectedMethod === 'cod'
+                ? 'Reserving Order for Pickup...'
+                : 'Securing Escrow Payment...'
+              : selectedMethod === 'cod'
+              ? `Confirm Cash on Delivery • ₱${itemPrice.toLocaleString()}`
               : selectedMethod
               ? `Pay ₱${itemPrice.toLocaleString()} with ${getMethodDisplayName(selectedMethod)}`
-              : 'Select a Payment Method'}
+              : 'Select a Payment Option'}
           </Text>
         </Pressable>
       </View>
@@ -1055,21 +1035,34 @@ const styles = StyleSheet.create({
     width: 44,
     height: 18,
   },
-  qrphLogoWrapper: {
+  codLogoWrapper: {
     width: 52,
     height: 40,
     borderRadius: Radius.md,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    paddingHorizontal: 4,
   },
-  qrphLogoImage: {
-    width: 44,
-    height: 18,
+  codDetailsCard: {
+    marginTop: Spacing.two,
+    padding: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 6,
+  },
+  codDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 2,
+  },
+  codDetailsTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  codDetailsText: {
+    fontSize: 11,
+    lineHeight: 16,
   },
   optionTextColumn: {
     flex: 1,
@@ -1082,15 +1075,6 @@ const styles = StyleSheet.create({
   },
   optionTitle: {
     fontSize: 14,
-    fontWeight: '700',
-  },
-  methodBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-  },
-  methodBadgeText: {
-    fontSize: 10,
     fontWeight: '700',
   },
   optionSubtitle: {
@@ -1146,91 +1130,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 15,
   },
-  qrExpandedContainer: {
-    paddingTop: Spacing.two,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.06)',
-    alignItems: 'center',
-    gap: Spacing.two,
-  },
-  qrInstructionHeading: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  qrInstructionSub: {
-    fontSize: 11,
-    textAlign: 'center',
-    lineHeight: 15,
-  },
-  qrCodeFrame: {
-    width: 236,
-    padding: Spacing.four,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    alignItems: 'center',
-    gap: Spacing.three,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  qrHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    width: '100%',
-    paddingBottom: Spacing.one,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  qrTopLogo: {
-    width: 68,
-    height: 18,
-  },
-  qrStandardBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-  },
-  qrStandardBadgeText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: '#1D4ED8',
-    letterSpacing: 0.3,
-  },
-  realQrBox: {
-    padding: Spacing.two,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qrMetadataRow: {
-    alignItems: 'center',
-    gap: 2,
-    width: '100%',
-    paddingTop: Spacing.one,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  qrMerchantText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#6B7280',
-    letterSpacing: 0.5,
-  },
-  qrAmountText: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#111827',
-  },
-  qrExpiryNote: {
-    fontSize: 10,
-  },
+
   bottomDock: {
     position: 'absolute',
     bottom: 0,

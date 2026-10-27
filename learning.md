@@ -111,15 +111,13 @@ This document captures project-specific design standards, user preferences, and 
 - **Context-Aware Bottom Action Dock**:
   - For items that cost money (`tradeType === 'buy' && price > 0`), the primary CTA must clearly show the financial commitment and flow: `Pay Now • ₱{item.price}`, paired with a secondary icon button for quick seller chat inquiry.
   - For swap or free items, preserve direct communication CTAs: `Propose Swap Trade` or `Request Freebie`.
-- **Philippine Student Payment Channels (GCash, Maya, QR Ph)**:
-  - Standardize on official national channels: **GCash** (e-wallet), **Maya** (digital bank & wallet), and **QR Ph** (universal national interoperable QR standard).
-  - Respect official brand identities with tailored logo containers (e.g. sleek dark container for Maya's `#2FF19E` neon green logo to ensure maximum visual contrast; clean white/bordered containers for GCash and QR Ph).
+- **Philippine Student Payment Channels (Cash on Delivery, GCash, Maya)**:
+  - Standardize on official national channels: **Cash on Delivery (Meetup Handover)** as the primary option, followed by **GCash** (e-wallet) and **Maya** (digital bank & wallet). QR Ph has been removed in favor of direct meetup cash exchange with zero advance risk.
+  - Respect official brand identities with tailored logo containers (e.g. green accent container with cash vector for COD, sleek dark container for Maya's `#2FF19E` logo, clean white/bordered containers for GCash).
   - Follow the **Zero Pre-Selection Invariant**: Payment methods must never be pre-selected; initialize to `null` so students explicitly and deliberately choose their payment channel.
-- **Escrow-First Peace of Mind**:
-  - Emphasize campus escrow protection: student payments are locked safely in escrow and only released to the seller after in-person inspection at the designated safe campus meetup spot (`item.safeMeetupSpot`).
-- **Authentic QR Code Generation**:
-  - Always render real, scannable QR matrices via `react-native-qrcode-svg` with `react-native-svg` instead of mock CSS/vector approximations.
-  - Encode structured, verifiable payment payloads (e.g. item ID, seller, safe meetup zone, escrow status, and price) accompanied by official BSP/QR Ph national standard badges and merchant metadata.
+- **Escrow & Cash Meetup Handover Peace of Mind**:
+  - For digital payments, funds are locked safely in escrow until meetup verification.
+  - For Cash on Delivery (COD), order reservations are confirmed in-app with clear handover instructions: buyer inspects the item at the designated campus safe meetup spot (`item.safeMeetupSpot`) before handing over exact cash, with confirmation recorded in-app.
 - **Inline Non-Sticky Back Button on Same Row as Screen Title**:
   - Never float the back button sticky over the view using `position: 'absolute'`.
   - Place the back arrow button inside the `ScrollView` on the **same row** as the screen heading (`flexDirection: 'row'`, `alignItems: 'center'`, `gap: 12`), saving vertical space and allowing it to scroll away naturally.
