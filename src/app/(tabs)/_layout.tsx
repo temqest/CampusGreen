@@ -40,12 +40,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="swap"
+        name="basket"
         options={{
-          title: 'Swap',
+          title: 'Basket',
           tabBarIcon: ({ focused }) => (
             <Ionicons
-              name={focused ? 'repeat' : 'repeat-outline'}
+              name={focused ? 'basket' : 'basket-outline'}
               size={22}
               color={focused ? theme.primary : theme.textMuted}
             />
@@ -66,12 +66,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="freebies"
+        name="chat"
         options={{
-          title: 'Freebies',
+          title: 'Chat',
           tabBarIcon: ({ focused }) => (
             <Ionicons
-              name={focused ? 'gift' : 'gift-outline'}
+              name={focused ? 'chatbubbles' : 'chatbubbles-outline'}
               size={22}
               color={focused ? theme.primary : theme.textMuted}
             />
@@ -89,6 +89,19 @@ export default function TabLayout() {
               color={focused ? theme.primary : theme.textMuted}
             />
           ),
+        }}
+      />
+      {/* Hidden tabs (removed from bottom navbar) */}
+      <Tabs.Screen
+        name="swap"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="freebies"
+        options={{
+          href: null,
         }}
       />
     </Tabs>

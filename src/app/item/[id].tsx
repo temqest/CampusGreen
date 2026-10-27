@@ -215,8 +215,8 @@ export default function ItemDetailScreen() {
             style={[
               styles.greenImpactStrip,
               {
-                backgroundColor: theme.badgeGreenBg,
-                borderColor: theme.primaryBorder,
+                backgroundColor: theme.surfaceSubtle,
+                borderColor: theme.border,
               },
             ]}>
             <View
@@ -224,20 +224,20 @@ export default function ItemDetailScreen() {
                 styles.leafCircle,
                 { backgroundColor: theme.surface },
               ]}>
-              <Ionicons name="leaf" size={15} color={theme.primary} />
+              <Ionicons name="leaf-outline" size={15} color={theme.primary} />
             </View>
             <View style={styles.greenImpactTextGroup}>
               <Text
                 style={[
                   styles.greenImpactHeading,
-                  { color: theme.primaryDark },
+                  { color: theme.text },
                 ]}>
                 Green Campus Impact
               </Text>
               <Text
                 style={[
                   styles.greenImpactSubtext,
-                  { color: theme.primary },
+                  { color: theme.textSecondary },
                 ]}>
                 Saves ~{item.estimatedCo2SavedKg} kg CO₂e from new manufacturing
               </Text>

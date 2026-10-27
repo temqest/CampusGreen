@@ -120,21 +120,38 @@ This document captures project-specific design standards, user preferences, and 
 - **Authentic QR Code Generation**:
   - Always render real, scannable QR matrices via `react-native-qrcode-svg` with `react-native-svg` instead of mock CSS/vector approximations.
   - Encode structured, verifiable payment payloads (e.g. item ID, seller, safe meetup zone, escrow status, and price) accompanied by official BSP/QR Ph national standard badges and merchant metadata.
-- **Zero Website Topbar Layouts (App-Wide)**:
-  - Enforce `screenOptions={{ headerShown: false }}` on root Stack navigators so no screen inherits browser/web navigation bars.
-  - Never render full-width navbar strips with bottom borders on standalone mobile views. Use floating circular back buttons in the top-left corner and organic in-page headings.
-- **Strict Color Contrast Harmony on Action Buttons**:
-  - Solid primary action buttons (`theme.primary` dark forest green) must consistently pair with `#FFFFFF` vector icons AND `#FFFFFF` typography.
-  - Never omit explicit text color tokens on primary buttons to prevent platform default text from falling back to black on dark backgrounds.
-- **Scroll Clearance for Pinned Multi-Action Docks**:
-  - Whenever a screen features a multi-button pinned bottom dock (e.g. primary + secondary action buttons with ~140–150px total height), `ScrollView`'s `contentContainerStyle` must provide `paddingBottom: insets.bottom + 160` to `170` minimum.
-  - Insufficient bottom padding clips the lowest card (e.g., meetup location, safety guidelines) behind the sticky dock.
+- **Inline Non-Sticky Back Button on Same Row as Screen Title**:
+  - Never float the back button sticky over the view using `position: 'absolute'`.
+  - Place the back arrow button inside the `ScrollView` on the **same row** as the screen heading (`flexDirection: 'row'`, `alignItems: 'center'`, `gap: 12`), saving vertical space and allowing it to scroll away naturally.
+- **Card Color Harmony (Never Monochromatic All-Green)**:
+  - Never paint the background, border, title, and body text in variations of the same green tone.
+  - Information and reassurance cards must use standard `theme.surface` (or subtle neutral `theme.surfaceSubtle`), with `theme.text` for the title and `theme.textSecondary` for body copy. Use brand green exclusively for the icon accent.
+- **Zero Decorative Badges on Payment Channels**:
+  - Do not attach decorative tags (`"Universal"`, `"E-Wallet"`, `"Digital Bank"`) to payment option titles.
 - **72-Hour Auto-Completion Escrow Disclaimer**:
   - Always inform the buyer on the payment confirmation/escrow screen that following seller handover at the meetup spot, an automated 72-hour inspection window applies: if the buyer fails to respond or raise a dispute within 72 hours, the platform automatically completes the order without issue and releases payment to the seller.
 
 ---
 
-## 7. End-of-Session Learning Protocol
+## 7. Bottom Navbar Architecture & Workflow Hierarchy
+
+- **Bottom Navbar Tab Selection**:
+  - Keep the bottom navbar focused on core student workflows:
+    1. **Marketplace** (`storefront`): Main campus discovery and search feed.
+    2. **Basket** (`basket`): Campus pickup basket, escrow checkout summary, and CO₂ savings accumulator.
+    3. **Sell** (`add-circle`): Centered prominent listing action.
+    4. **Chat** (`chatbubbles`): Campus peer-to-peer messaging and meetup coordination.
+    5. **Profile** (`person`): Student account, verifications, and reputation.
+  - **In-Feed Filters over Redundant Tabs**: Deal types like *Swap* and *Freebies* are discovery filters rather than distinct apps; handle them via the in-feed deal selector in Marketplace, avoiding bottom tab bar bloat.
+  - **Zero Website Topbars on Tab Views**:
+    - Never render pinned horizontal header strips with `borderBottomWidth: 1` or decorative pill tags across the top of mobile tab screens (`Basket`, `Chat`, `Marketplace`).
+    - In native mobile apps, screen titles are organic in-page large headings (`ListHeaderComponent` in `FlatList`) that scroll naturally with the content. Search inputs, filters, and safety notes must sit directly inside the scrollable feed rather than in pinned website-like navbar blocks.
+  - **Hiding Deprecated Tab Files**: When removing screens from Expo Router tabs while preserving route files, always set `options={{ href: null }}` on `<Tabs.Screen />` so Expo Router does not generate auto-tabs.
+  - **React 19 Compiler Purity Invariant**: Avoid calling impure functions like `Date.now()` or non-deterministic generators inside render or callbacks without stable identifiers to adhere to `react-hooks/purity` linter rules.
+
+---
+
+## 8. End-of-Session Learning Protocol
 
 - At the conclusion of every session where design feedback, corrections, or user preferences are expressed:
   1. Review user corrections, design constraints, and negative feedback.

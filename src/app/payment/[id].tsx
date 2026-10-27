@@ -294,47 +294,35 @@ export default function PaymentScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       style={[styles.screen, { backgroundColor: theme.background }]}>
-      {/* Floating Back Button - No Web Topbar Layout */}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-        style={({ pressed }) => [
-          styles.floatingBackBtn,
-          {
-            top: insets.top + (Platform.OS === 'ios' ? 8 : 12),
-            backgroundColor: theme.surface,
-            borderColor: theme.border,
-            opacity: pressed ? 0.75 : 1,
-          },
-        ]}
-        onPress={() => router.back()}>
-        <Ionicons name="chevron-back" size={22} color={theme.text} />
-      </Pressable>
-
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: insets.top + (Platform.OS === 'ios' ? 56 : 60),
+            paddingTop: insets.top + Spacing.two,
             paddingBottom: insets.bottom + 120,
           },
         ]}>
-        {/* Organic In-Page Title Section */}
-        <View style={styles.checkoutHero}>
+        {/* Header Row: Non-sticky Back Arrow + Checkout Title on same row */}
+        <View style={styles.headerRow}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={({ pressed }) => [
+              styles.backBtn,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+                opacity: pressed ? 0.75 : 1,
+              },
+            ]}
+            onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color={theme.text} />
+          </Pressable>
+
           <Text style={[styles.pageHeading, { color: theme.text }]}>
             Checkout
           </Text>
-          <View
-            style={[
-              styles.escrowChip,
-              { backgroundColor: theme.badgeGreenBg },
-            ]}>
-            <Ionicons name="shield-checkmark" size={13} color={theme.primary} />
-            <Text style={[styles.escrowChipText, { color: theme.primary }]}>
-              Safe Campus Escrow
-            </Text>
-          </View>
         </View>
         {/* Item Summary Card */}
         <View
@@ -384,19 +372,19 @@ export default function PaymentScreen() {
           </View>
         </View>
 
-        {/* Escrow Protection Reassurance */}
+        {/* Escrow Protection Reassurance Card */}
         <View
           style={[
             styles.escrowBanner,
             {
-              backgroundColor: theme.badgeGreenBg,
-              borderColor: theme.primaryBorder,
+              backgroundColor: theme.surface,
+              borderColor: theme.border,
             },
           ]}>
           <View
             style={[
               styles.escrowIconBadge,
-              { backgroundColor: theme.surface },
+              { backgroundColor: theme.primaryLight },
             ]}>
             <Ionicons name="shield-checkmark" size={16} color={theme.primary} />
           </View>
@@ -404,14 +392,14 @@ export default function PaymentScreen() {
             <Text
               style={[
                 styles.escrowBannerTitle,
-                { color: theme.primaryDark },
+                { color: theme.text },
               ]}>
               CampusGreen Student Escrow Protection
             </Text>
             <Text
               style={[
                 styles.escrowBannerBody,
-                { color: theme.primary },
+                { color: theme.textSecondary },
               ]}>
               Payment is held safely in escrow. Funds are transferred to the
               seller only when both of you meet on campus and verify the item.
@@ -509,15 +497,6 @@ export default function PaymentScreen() {
                 <Text style={[styles.optionTitle, { color: theme.text }]}>
                   GCash
                 </Text>
-                <View
-                  style={[
-                    styles.methodBadge,
-                    { backgroundColor: 'rgba(0, 124, 255, 0.1)' },
-                  ]}>
-                  <Text style={[styles.methodBadgeText, { color: '#007CFF' }]}>
-                    E-Wallet
-                  </Text>
-                </View>
               </View>
               <Text
                 style={[
@@ -633,15 +612,6 @@ export default function PaymentScreen() {
                 <Text style={[styles.optionTitle, { color: theme.text }]}>
                   Maya
                 </Text>
-                <View
-                  style={[
-                    styles.methodBadge,
-                    { backgroundColor: 'rgba(47, 241, 158, 0.12)' },
-                  ]}>
-                  <Text style={[styles.methodBadgeText, { color: '#0B7F4F' }]}>
-                    Digital Bank
-                  </Text>
-                </View>
               </View>
               <Text
                 style={[
@@ -756,15 +726,6 @@ export default function PaymentScreen() {
                 <Text style={[styles.optionTitle, { color: theme.text }]}>
                   QR Ph National Standard
                 </Text>
-                <View
-                  style={[
-                    styles.methodBadge,
-                    { backgroundColor: 'rgba(252, 32, 23, 0.08)' },
-                  ]}>
-                  <Text style={[styles.methodBadgeText, { color: '#B91C1C' }]}>
-                    Universal
-                  </Text>
-                </View>
               </View>
               <Text
                 style={[
@@ -920,44 +881,24 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
   },
-  floatingBackBtn: {
-    position: 'absolute',
-    left: Spacing.four,
-    zIndex: 10,
-    width: 40,
-    height: 40,
-    borderRadius: Radius.full,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    paddingBottom: Spacing.one,
+  },
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.md,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  checkoutHero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: Spacing.one,
   },
   pageHeading: {
     fontSize: 22,
     fontWeight: '800',
     letterSpacing: -0.4,
-  },
-  escrowChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: Spacing.two,
-    paddingVertical: Spacing.one,
-    borderRadius: Radius.full,
-  },
-  escrowChipText: {
-    fontSize: 11,
-    fontWeight: '700',
   },
   scrollContent: {
     padding: Spacing.four,
