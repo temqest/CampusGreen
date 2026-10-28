@@ -35,9 +35,9 @@ const SAMPLE_PRESETS: { title: string; uri: string; label: string }[] = [
     label: 'Front Cover',
   },
   {
-    title: 'Nursing Scrubs Set',
-    uri: 'https://images.unsplash.com/photo-1584820927498-cfe5211fd8bf?w=600&q=80',
-    label: 'Uniform Top',
+    title: 'BS Tourism Corporate Blazer',
+    uri: 'https://images.unsplash.com/photo-1585240975858-7264fd020798?w=600&q=80',
+    label: 'Blazer & Scarf Set',
   },
   {
     title: 'Casio Calculator',

@@ -356,11 +356,20 @@ export default function ItemDetailScreen() {
                         styles.thumbnailIconBox,
                         { backgroundColor: theme.surfaceSubtle },
                       ]}>
-                      <Ionicons
-                        name={photo.iconName}
-                        size={24}
-                        color={isActive ? theme.primary : theme.textSecondary}
-                      />
+                      {photo.uri ? (
+                        <Image
+                          source={{ uri: photo.uri }}
+                          style={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                          transition={200}
+                        />
+                      ) : (
+                        <Ionicons
+                          name={photo.iconName}
+                          size={24}
+                          color={isActive ? theme.primary : theme.textSecondary}
+                        />
+                      )}
                     </View>
                     <Text
                       numberOfLines={1}
@@ -438,7 +447,16 @@ export default function ItemDetailScreen() {
                   styles.sellerAvatar,
                   { backgroundColor: theme.primaryLight },
                 ]}>
-                <Ionicons name="person" size={20} color={theme.primary} />
+                {item.sellerAvatarUri ? (
+                  <Image
+                    source={{ uri: item.sellerAvatarUri }}
+                    style={styles.sellerAvatarImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <Ionicons name="person" size={20} color={theme.primary} />
+                )}
               </View>
               <View style={styles.sellerInfo}>
                 <View style={styles.sellerNameRow}>
@@ -956,6 +974,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  sellerAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.full,
   },
   sellerInfo: {
     flex: 1,

@@ -106,21 +106,25 @@ export default function ProfileScreen() {
 
   // Edit Meetup Spot Modal
   const [isEditSpotModalVisible, setIsEditSpotModalVisible] = useState(false);
-  const [preferredSpot, setPreferredSpot] = useState('Nursing Bldg Lobby (Burns Hall)');
+  const [preferredSpot, setPreferredSpot] = useState('Alingal Hall (Tourism Lobby)');
   const [tempSpot, setTempSpot] = useState(preferredSpot);
 
   // Student Profile Identity State
   const [profileName, setProfileName] = useState('Maria Santos');
-  const [profileDegree, setProfileDegree] = useState('BS Nursing');
+  const [profileDegree, setProfileDegree] = useState('BS Tourism Management');
   const [profileYearLevel, setProfileYearLevel] = useState('3rd Year');
-  const [profileAvatarUri, setProfileAvatarUri] = useState<string | null>(null);
+  const [profileAvatarUri, setProfileAvatarUri] = useState<string | null>(
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'
+  );
 
   // Edit Profile Details Modal State
   const [isEditProfileModalVisible, setIsEditProfileModalVisible] = useState(false);
   const [tempProfileName, setTempProfileName] = useState(profileName);
   const [tempProfileDegree, setTempProfileDegree] = useState(profileDegree);
   const [tempProfileYearLevel, setTempProfileYearLevel] = useState(profileYearLevel);
-  const [tempAvatarUri, setTempAvatarUri] = useState<string | null>(profileAvatarUri);
+  const [tempAvatarUri, setTempAvatarUri] = useState<string | null>(
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'
+  );
 
   // Profile Photo Picker Modal State (Same file picker found in sell)
   const [isPhotoPickerModalVisible, setIsPhotoPickerModalVisible] = useState(false);
@@ -1899,13 +1903,13 @@ export default function ProfileScreen() {
                 style={[styles.modalTextInput, { color: theme.text }]}
                 value={tempSpot}
                 onChangeText={setTempSpot}
-                placeholder="e.g. Nursing Bldg Lobby, Library Ground Floor"
+                placeholder="e.g. Alingal Hall Tourism Lobby, Library Ground Floor"
                 placeholderTextColor={theme.textMuted}
               />
             </View>
 
             <View style={styles.quickSpotChipsRow}>
-              {['Nursing Bldg Lobby', 'Main Library Ground Floor', 'Gate 1 Security Post'].map((spot) => (
+              {['Alingal Hall Tourism Lobby', 'Main Library Ground Floor', 'Gate 1 Security Post'].map((spot) => (
                 <Pressable
                   key={spot}
                   style={[
@@ -2364,7 +2368,7 @@ export default function ProfileScreen() {
               ]}>
               <TextInput
                 style={[styles.modalTextInput, { color: theme.text }]}
-                placeholder="e.g. BS Nursing"
+                placeholder="e.g. BS Tourism Management"
                 placeholderTextColor={theme.textMuted}
                 autoCapitalize="words"
                 value={tempProfileDegree}

@@ -81,7 +81,7 @@ export function MarketplaceHeader({
         />
         <TextInput
           accessibilityLabel="Search items or courses"
-          placeholder="Search items, courses (e.g. Nursing), gear..."
+          placeholder="Search items, courses (e.g. Tourism), gear..."
           placeholderTextColor={theme.textMuted}
           value={searchQuery}
           onChangeText={onSearchChange}

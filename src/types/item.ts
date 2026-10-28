@@ -43,6 +43,7 @@ export interface MarketplaceItem {
   sellerRating: number;
   sellerYear: string;
   isVerifiedStudent: boolean;
+  sellerAvatarUri?: string;
   isReserved?: boolean;
   isUrgent?: boolean; // Seller growth tool: Urgent Selling Badge
   bumpCount?: number; // Seller growth tool: Listing Bumps count

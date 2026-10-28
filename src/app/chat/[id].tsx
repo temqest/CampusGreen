@@ -282,6 +282,33 @@ export default function ChatScreen() {
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </Pressable>
 
+        {item.sellerAvatarUri ? (
+          <Image
+            source={{ uri: item.sellerAvatarUri }}
+            style={styles.headerAvatar}
+            contentFit="cover"
+          />
+        ) : (
+          <View
+            style={[
+              styles.headerAvatar,
+              {
+                backgroundColor: theme.primaryLight,
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+            ]}>
+            <Text
+              style={{
+                fontSize: 13,
+                fontWeight: '700',
+                color: theme.primary,
+              }}>
+              {sellerDisplayName.charAt(0)}
+            </Text>
+          </View>
+        )}
+
         <View style={styles.headerTitleGroup}>
           <View style={styles.sellerRow}>
             <Text
@@ -1396,6 +1423,12 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: Spacing.one,
+  },
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
   },
   headerTitleGroup: {
     flex: 1,

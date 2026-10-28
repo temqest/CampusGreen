@@ -50,6 +50,7 @@ const CAMPUS_OPTIONS = [
 ];
 
 const DEFAULT_MEETUP_SPOTS = [
+  'Alingal Hall (Tourism Lobby)',
   'Main Library Ground Floor',
   'Gate 1 Security Post',
   'Burns Hall (Nursing Bldg)',
@@ -398,7 +399,7 @@ export default function SellScreen() {
                       color: theme.text,
                     },
                   ]}
-                  placeholder="e.g. Casio FX-991EX ClassWiz or Size M Nursing Scrubs"
+                  placeholder="e.g. BS Tourism Corporate Blazer or Cabin Luggage"
                   placeholderTextColor={theme.textMuted}
                   value={title}
                   onChangeText={setTitle}
@@ -822,7 +823,7 @@ export default function SellScreen() {
                       color: theme.text,
                     },
                   ]}
-                  placeholder="e.g. BS Nursing, BS Accountancy, Engineering"
+                  placeholder="e.g. BS Tourism Management, BS Accountancy"
                   placeholderTextColor={theme.textMuted}
                   value={courseTag}
                   onChangeText={setCourseTag}

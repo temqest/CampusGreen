@@ -27,11 +27,11 @@ const YEAR_LEVELS = [
 ];
 
 const DEGREE_PROGRAMS = [
-  { id: 'nursing', name: 'BS Nursing', dept: 'Health Sciences' },
+  { id: 'tourism', name: 'BS Tourism Management', dept: 'Hospitality & Tourism' },
   { id: 'accountancy', name: 'BS Accountancy', dept: 'Business' },
+  { id: 'nursing', name: 'BS Nursing', dept: 'Health Sciences' },
   { id: 'it', name: 'BS Information Technology', dept: 'Computing' },
   { id: 'cs', name: 'BS Computer Science', dept: 'Computing' },
-  { id: 'tourism', name: 'BS Tourism Management', dept: 'Hospitality' },
   { id: 'civil_eng', name: 'BS Civil Engineering', dept: 'Engineering' },
   { id: 'ba', name: 'BS Business Administration', dept: 'Business' },
   { id: 'education', name: 'BS Secondary Education', dept: 'Education' },

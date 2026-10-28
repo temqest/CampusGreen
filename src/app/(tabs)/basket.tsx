@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -119,23 +120,32 @@ export default function BasketScreen() {
                 },
               ]}>
               <View style={styles.cardHeaderRow}>
-                {/* Category icon placeholder */}
+                {/* Category icon or item photo */}
                 <View
                   style={[
                     styles.itemIconCircle,
                     { backgroundColor: theme.surfaceSubtle },
                   ]}>
-                  <Ionicons
-                    name={
-                      item.category.includes('Tech')
-                        ? 'calculator-outline'
-                        : item.category.includes('Uniform')
-                        ? 'shirt-outline'
-                        : 'book-outline'
-                    }
-                    size={22}
-                    color={theme.primary}
-                  />
+                  {item.imageUrl || item.photos?.[0]?.uri ? (
+                    <Image
+                      source={{ uri: item.imageUrl || item.photos?.[0]?.uri }}
+                      style={styles.itemImageThumb}
+                      contentFit="cover"
+                      transition={200}
+                    />
+                  ) : (
+                    <Ionicons
+                      name={
+                        item.category.includes('Tech')
+                          ? 'calculator-outline'
+                          : item.category.includes('Uniform')
+                          ? 'shirt-outline'
+                          : 'book-outline'
+                      }
+                      size={22}
+                      color={theme.primary}
+                    />
+                  )}
                 </View>
 
                 <View style={styles.itemMainInfo}>
@@ -470,6 +480,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  itemImageThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
   },
   itemMainInfo: {
     flex: 1,

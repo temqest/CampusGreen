@@ -27,6 +27,7 @@ export interface ChatConversation {
   timestamp: string;
   unreadCount: number;
   safeMeetupSpot: string;
+  sellerAvatarUri?: string;
 }
 
 const INITIAL_CONVERSATIONS: ChatConversation[] = [
@@ -42,45 +43,49 @@ const INITIAL_CONVERSATIONS: ChatConversation[] = [
     timestamp: '10m ago',
     unreadCount: 1,
     safeMeetupSpot: 'EA Building Security Guard Post',
+    sellerAvatarUri: 'https://images.unsplash.com/photo-1680525021501-ddea41969892?w=400&q=80',
   },
   {
     id: 'conv-free',
     itemId: '3',
     sellerName: 'Bea Dimaculangan',
-    sellerYear: '2nd Year BSBA',
-    itemTitle: 'Pay-It-Forward: GenEd Reviewers & Readings Bundle',
+    sellerYear: '2nd Year BSTM',
+    itemTitle: 'Pay-It-Forward: Philippine Heritage & Cultural Tourism Reviewers',
     price: null,
     tradeType: 'free',
-    lastMessage: 'The reviewers are all set for you! Tap accept to confirm reservation.',
+    lastMessage: 'The heritage review notes are all set for you! Tap accept to confirm reservation.',
     timestamp: '25m ago',
     unreadCount: 1,
-    safeMeetupSpot: 'Student Pavilion (Gazebo Area)',
+    safeMeetupSpot: 'Alingal Hall Tourism Lobby',
+    sellerAvatarUri: 'https://images.unsplash.com/photo-1765650113773-0752556dcea0?w=400&q=80',
   },
   {
     id: 'conv-buy-1',
     itemId: '1',
     sellerName: 'Maria Santos',
-    sellerYear: '3rd Year BSN',
-    itemTitle: 'AdNU College of Nursing Scrubs Set (Size M)',
-    price: 350,
+    sellerYear: '3rd Year BSTM',
+    itemTitle: 'AdNU BS Tourism Corporate Blazer & Scarf Set (Size M)',
+    price: 450,
     tradeType: 'buy',
-    lastMessage: 'Sure! Let’s meet at Burns Hall lobby tomorrow around 2:30 PM.',
+    lastMessage: 'Sure! Let’s meet at Alingal Hall Tourism Lobby tomorrow around 2:30 PM.',
     timestamp: '1h ago',
     unreadCount: 0,
-    safeMeetupSpot: 'Nursing Bldg Lobby (Burns Hall)',
+    safeMeetupSpot: 'Alingal Hall Tourism Lobby',
+    sellerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
   },
   {
     id: 'conv-buy-2',
     itemId: '2',
     sellerName: 'Kenzo Alcantara',
-    sellerYear: '4th Year BSCE',
-    itemTitle: 'Casio FX-991EX ClassWiz Scientific Calculator',
-    price: 850,
+    sellerYear: '4th Year BSTM',
+    itemTitle: 'Tour Guiding Portable Voice Amplifier & Wireless Mic Kit',
+    price: 750,
     tradeType: 'buy',
-    lastMessage: 'PRC board seal is completely intact. Can bring it to Main Library anytime today.',
+    lastMessage: 'Rechargeable amplifier & mic are fully working. Can bring it to Alingal Hall anytime today.',
     timestamp: '3h ago',
     unreadCount: 0,
-    safeMeetupSpot: 'Main Library Ground Floor',
+    safeMeetupSpot: 'Alingal Hall Tourism Lobby',
+    sellerAvatarUri: 'https://images.unsplash.com/photo-1492462543947-040389c4a66c?w=400&q=80',
   },
 ];
 
@@ -109,19 +114,19 @@ const INITIAL_MESSAGES: Record<string, Message[]> = {
     {
       id: 'm1',
       sender: 'seller',
-      text: 'Hi! Glad someone can make use of the GenEd Reviewers & Readings Bundle! It is completely free.',
+      text: 'Hi! Glad someone can make use of the Philippine Heritage & Cultural Tourism Reviewers! It is completely free.',
       timestamp: '1:10 PM',
     },
     {
       id: 'm2',
       sender: 'me',
-      text: 'Thank you Bea! Can I pick it up at the Student Pavilion (Gazebo Area)?',
+      text: 'Thank you Bea! Can I pick it up at Alingal Hall Tourism Lobby?',
       timestamp: '1:14 PM',
     },
     {
       id: 'm3',
       sender: 'seller',
-      text: 'The reviewers are all set for you! Tap accept to confirm reservation.',
+      text: 'The heritage review notes are all set for you! Tap accept to confirm reservation.',
       timestamp: '25m ago',
     },
   ],
@@ -129,19 +134,19 @@ const INITIAL_MESSAGES: Record<string, Message[]> = {
     {
       id: 'm1',
       sender: 'seller',
-      text: 'Hi! Thanks for checking out the Scrubs Set (Size M). It is still in great condition.',
+      text: 'Hi! Thanks for checking out the BS Tourism Corporate Blazer & Scarf Set (Size M). It is freshly dry-cleaned and ready for practicum.',
       timestamp: '1:30 PM',
     },
     {
       id: 'm2',
       sender: 'me',
-      text: 'Hi Maria! Can we meet at Nursing Bldg Lobby (Burns Hall)?',
+      text: 'Hi Maria! Can we meet at Alingal Hall Tourism Lobby?',
       timestamp: '1:45 PM',
     },
     {
       id: 'm3',
       sender: 'seller',
-      text: 'Sure! Let’s meet at Burns Hall lobby tomorrow around 2:30 PM.',
+      text: 'Sure! Let’s meet at Alingal Hall Tourism Lobby tomorrow around 2:30 PM.',
       timestamp: '1h ago',
     },
   ],
@@ -149,19 +154,19 @@ const INITIAL_MESSAGES: Record<string, Message[]> = {
     {
       id: 'm1',
       sender: 'seller',
-      text: 'Hey there! Let me know if you need any details about the Casio FX-991EX ClassWiz.',
+      text: 'Hey there! Let me know if you need any details about the Tour Guiding Portable Voice Amplifier & Wireless Mic Kit.',
       timestamp: '11:00 AM',
     },
     {
       id: 'm2',
       sender: 'me',
-      text: 'Hi Kenzo, is the PRC board seal intact?',
+      text: 'Hi Kenzo, is the headset microphone and AUX cord included?',
       timestamp: '11:15 AM',
     },
     {
       id: 'm3',
       sender: 'seller',
-      text: 'PRC board seal is completely intact. Can bring it to Main Library anytime today.',
+      text: 'Rechargeable amplifier & mic are fully working. Can bring it to Alingal Hall anytime today.',
       timestamp: '3h ago',
     },
   ],
@@ -314,6 +319,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           timestamp: 'Just now',
           unreadCount: 0,
           safeMeetupSpot: item.safeMeetupSpot || 'Campus Meetup Zone',
+          sellerAvatarUri: item.sellerAvatarUri,
         };
 
         return [newConversation, ...prev];

@@ -343,3 +343,20 @@ This document captures project-specific design standards, user preferences, and 
 - **Post-Rating Persistence**:
   - Submitting appends a verified review system entry in chat (`⭐ You rated {sellerName} ★★★★★ ({scoreLabel})`).
   - The completed card in chat displays the buyer's review summary (`{score}/5 Stars · Verified Peer Review`) with an "Edit Rating" button, or an inviting "Rate {sellerName} (1–5 Stars)" button if previously skipped.
+
+### 20. Realistic Media Population & Tourism Program Alignment (Media & Course Context)
+- **Authentic Student & Gear Photography (Zero Placeholders, Zero AI Noise)**:
+  - Blank gray boxes and icon placeholders reduce MVP perceived quality and user trust.
+  - Populate listings with authentic, high-resolution photography sourced via Unsplash (respecting rate limits by caching search results and preserving URLs).
+  - All avatars must feature natural student portraits with clean circular framing (`borderRadius: 999`), verified checkmark indicators, and robust fallbacks to initial monograms if an avatar URI fails to load.
+- **Dynamic Multi-Angle Gallery Support**:
+  - Each marketplace item supports an array of descriptive `photos` (`id`, `label`, `iconName`, `uri`) highlighting key product inspection points (e.g., front cover, detail stitching, labels, accessories).
+  - Item detail screens display these as an interactive horizontal preview gallery (`Photo Gallery`) with thumbnail imagery and labels before committing to a purchase or meetup.
+- **Curriculum-Specific Alignment (Tourism & Hospitality Context)**:
+  - When steering an MVP towards a specific college demographic (e.g., BS Tourism Management), ensure consistency across the entire user experience:
+    - **Listing Titles & Descriptions**: Real-world departmental items (e.g., official corporate blazers with silk neck scarves, Philippine Tourism Geography textbooks, 20-inch hard-shell cabin luggage for flight practicum, portable voice amplifiers with headset mics for tour guiding, and RFID airline document organizers).
+    - **Safe Meetup Zones**: Reflect departmental campus hubs (e.g., `Alingal Hall Tourism Lobby` alongside `Main Library Ground Floor`).
+    - **Chat Dialogues & Mock Threads**: Inquiries should naturally speak to practicum and tourism syllabus requirements (e.g., dry-cleaning quality, microphone AUX inputs, itinerary coverage).
+    - **Profile Defaults**: Default active listings, degree programs (`BS Tourism Management`), and preferred exchange locations align with the student persona.
+- **Consistent Thumbnail Rendering Across Tabs**:
+  - Item images must be rendered in the **Basket** (`src/app/(tabs)/basket.tsx`), **Chat Inbox** (`src/app/(tabs)/chat.tsx`), **Active Profile Listings** (`src/app/(tabs)/profile.tsx`), and **Marketplace Grid** (`src/components/marketplace/item-card.tsx`) using `ExpoImage` (`contentFit="cover"`).

@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -213,9 +214,18 @@ export default function ChatInboxScreen() {
                   styles.avatar,
                   { backgroundColor: theme.surfaceSubtle },
                 ]}>
-                <Text style={[styles.avatarText, { color: theme.primary }]}>
-                  {initials}
-                </Text>
+                {item.sellerAvatarUri ? (
+                  <Image
+                    source={{ uri: item.sellerAvatarUri }}
+                    style={styles.avatarImage}
+                    contentFit="cover"
+                    transition={200}
+                  />
+                ) : (
+                  <Text style={[styles.avatarText, { color: theme.primary }]}>
+                    {initials}
+                  </Text>
+                )}
               </View>
 
               {/* Chat details */}
@@ -399,6 +409,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 46,
+    height: 46,
+    borderRadius: Radius.full,
   },
   avatarText: {
     fontSize: 15,
