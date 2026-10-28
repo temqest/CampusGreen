@@ -214,10 +214,82 @@ This document captures project-specific design standards, user preferences, and 
 
 ---
 
-## 11. End-of-Session Learning Protocol
+## 12. Real Mobile Screen Dimensions & Playwright Viewport Calibration
+
+- **Always Test Against Real Student Smartphone Viewports**:
+  - Never test or inspect UI in wide desktop browser viewports or default large desktop browser windows (>450px).
+  - Desktop web widths provide artificial horizontal room that masks text wrapping bugs, cramped touch targets, and overlapping button rows that fail completely on actual mobile hardware.
+- **Reference Device Specifications**:
+  - **Tecno Camon 20 Pro (Primary Android Reference)**:
+    - Screen Size: 6.67 inches (~107.4 cm² / ~85.7% screen-to-body ratio), 20:9 aspect ratio.
+    - Physical Resolution: 1080 × 2400 pixels (~395 ppi density).
+    - **Playwright / CSS Logical Viewport**: Set explicitly to **`width: 360, height: 800`** (or `width: 392, height: 872` at 2.75x ratio). Always use **`360 × 800`** as the baseline stress-test width.
+  - **Standard Compact iPhone Reference**:
+    - **`width: 375, height: 812`** (iPhone 11 Pro / X / 13 mini).
+  - **Standard Modern iPhone Reference**:
+    - **`width: 390, height: 844`** (iPhone 14 / 15).
+- **Hard Mobile Layout Invariant**:
+  - **Never squeeze more than 2-3 interactive buttons into a single horizontal row** inside a mobile card.
+  - At 360px viewport width (360px screen - 32px screen padding - 24px card padding = ~304px card width), a 5-button row yields <55px per button, rendering text illegible and causing severe mis-taps.
+  - Use a primary quick action button paired with a `••• Manage` / overflow action sheet modal instead of crowding the card dock.
+
+---
+
+## 14. Theme Mode Architecture & Account Action Descriptions
+
+- **App Appearance Management**:
+  - Theme switching must support 3 distinct modes: `'system' | 'light' | 'dark'`.
+  - Provide a centralized `ThemeProvider` (`src/context/theme-context.tsx`) wrapping the root navigator so any screen or component using `useTheme()` reacts immediately to user preferences.
+  - On web platforms, persist preference across sessions in `localStorage` under `campusgreen_theme_mode`.
+  - When authoring theme selection modals, represent options with distinct vector iconography (`phone-portrait-outline` for system, `sunny-outline` for light, `moon-outline` for dark) and radio checkmarks.
+- **Accurate Action Descriptions in Settings**:
+  - Never use identity metadata (e.g. `"Signed in as user@campus.edu.ph"`) as the secondary helper text for a destructive or terminal action like **Log Out**.
+  - Always explain the concrete device action: `"Sign out of this campus device"`.
+- **Philippine E-Wallet Brand Assets**:
+  - For Philippine payment channels (GCash, Maya, QR Ph), always render the authentic SVG logos located in `assets/` (`assets/gcash.svg`, `assets/maya.svg`, `assets/qr-ph.svg`) instead of generic placeholder icons (`wallet-outline`, `card-outline`).
+  - Containerize GCash on soft blue `#EFF6FF` and Maya on dark `#0A1810` for maximum contrast and brand fidelity.
+
+---
+
+## 15. Student Profile Editing & Avatar Photo Picker Architecture
+
+- **Unified Avatar & Identity Editing**:
+  - The student identity header should provide two natural interaction pathways:
+    1. **Tapping the avatar** or the subtle camera badge overlay triggers the **Profile Photo Picker Modal**.
+    2. **Tapping the pen icon button** opens the full **Edit Profile Details Modal** (Name, Degree/Program, Year Level chips, and Avatar change).
+- **Matching the File Picker Pattern**:
+  - Replicate the proven photo upload flow from `src/components/sell/photo-picker-section.tsx`:
+    - **Take a Live Photo**: `ImagePicker.launchCameraAsync` with `allowsEditing: true, aspect: [1, 1], quality: 0.85`.
+    - **Choose from Gallery**: `ImagePicker.launchImageLibraryAsync` with `allowsEditing: true, aspect: [1, 1], quality: 0.85`.
+    - **Campus Avatar Presets**: Include 4 realistic student avatar presets for instant selection and rapid simulator testing where native camera hardware is absent.
+    - **Remove Photo Option**: Conditionally present when a custom avatar is set, reverting cleanly to student initials.
+- **Modal Layering & Stacking Context Invariant**:
+  - In React Native Web and native view hierarchies, if a modal can be triggered from inside another active modal (e.g. tapping "Change Photo" inside the Edit Profile sheet), the sub-modal (`PhotoPickerModal`) **must appear after** the parent modal (`EditProfileModal`) in the JSX render order.
+  - Placing sub-modals earlier in the JSX causes the parent modal's backdrop overlay to render on top of the sub-modal in web DOM stacking order.
+
+---
+
+## 16. Product Detail Hero Ergonomics & Badge Placement
+
+- **Zero Occlusion of Product Hero Images**:
+  - The hero image is the single most critical asset on a product detail screen. Never place bulky, multi-pill clusters across the center or bottom-right of the carousel that obscure the product.
+  - Camera angle tags (`photoAngleLabel`) belong in the bottom-left corner (`bottom: 14, left: 16`) with compact padding, away from the image subject.
+- **Urgent & Sale Badges Must Be Single-Line Horizontal Chips**:
+  - Always apply `flexDirection: 'row', alignItems: 'center'` to badge containers.
+  - Never allow icons (`Ionicons name="flash"`) to stack vertically above label text, which creates an awkward, oversized, tower-like badge that breaks layout alignment.
+  - On the hero image, place the `⚡ URGENT` chip in the top-left gutter (`top: insets.top + 54, left: 16`) directly beneath the floating back button so it stays completely out of the photo subject's bounding box.
+- **Primary Price Belongs in the Product Body**:
+  - Do not rely solely on floating pills on top of the image to communicate price.
+  - Position a prominent **Price & Status Row** directly below the title in the product body with `22px` bold font, accompanied by a clean `⚡ URGENT SELLING` status tag and purchase type badge.
+
+---
+
+## 17. End-of-Session Learning Protocol
 
 - At the conclusion of every session where design feedback, corrections, or user preferences are expressed:
   1. Review user corrections, design constraints, and negative feedback.
   2. Extract universal principles (app-wide rules) rather than narrow screen-specific fixes.
   3. Update `learning.md` so that future agent sessions retain and build upon these lessons.
+
+
 

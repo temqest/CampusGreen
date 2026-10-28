@@ -134,18 +134,20 @@ export default function ItemDetailScreen() {
             )}
           />
 
+          {/* Top-Left Sleek Urgent Badge on Hero */}
+          {item.isUrgent && (
+            <View
+              style={[
+                styles.heroUrgentBadge,
+                { top: insets.top + (Platform.OS === 'ios' ? 54 : 58) },
+              ]}>
+              <Ionicons name="flash" size={11} color="#FFFFFF" />
+              <Text style={styles.heroUrgentText}>URGENT</Text>
+            </View>
+          )}
+
           {/* Floating Deal / Price Tag at bottom right of the hero */}
           <View style={styles.heroDealTagContainer}>
-            {item.isUrgent && (
-              <View
-                style={[
-                  styles.heroDealBadge,
-                  { backgroundColor: '#DC2626', marginRight: 6 },
-                ]}>
-                <Ionicons name="flash" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
-                <Text style={styles.heroDealText}>Urgent</Text>
-              </View>
-            )}
             {item.tradeType === 'buy' && (
               <View
                 style={[
@@ -217,6 +219,40 @@ export default function ItemDetailScreen() {
           <Text style={[styles.title, { color: theme.text }]}>
             {item.title}
           </Text>
+
+          {/* Price & Urgent Status Row */}
+          <View style={styles.priceAndStatusRow}>
+            <Text style={[styles.mainPriceText, { color: theme.primary }]}>
+              {item.tradeType === 'buy'
+                ? `₱${item.price}`
+                : item.tradeType === 'swap'
+                ? 'Swap Zone'
+                : 'Freebie'}
+            </Text>
+            {item.isUrgent && (
+              <View
+                style={[
+                  styles.bodyUrgentBadge,
+                  { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+                ]}>
+                <Ionicons name="flash" size={11} color="#DC2626" />
+                <Text style={styles.bodyUrgentText}>URGENT SELLING</Text>
+              </View>
+            )}
+            <View
+              style={[
+                styles.tradeTypePill,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}>
+              <Text style={[styles.tradeTypePillText, { color: theme.textSecondary }]}>
+                {item.tradeType === 'buy'
+                  ? 'Verified Purchase'
+                  : item.tradeType === 'swap'
+                  ? 'Campus Exchange'
+                  : 'Student Freebie'}
+              </Text>
+            </View>
+          </View>
 
           {/* Condition, Category & Post Time */}
           <View style={styles.metaRow}>
@@ -594,10 +630,10 @@ const styles = StyleSheet.create({
   },
   carouselWrapper: {
     position: 'relative',
-    height: 250,
+    height: 275,
   },
   heroSlide: {
-    height: 250,
+    height: 275,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -624,17 +660,43 @@ const styles = StyleSheet.create({
   },
   photoAngleLabel: {
     position: 'absolute',
-    top: 70,
+    bottom: 14,
+    left: 16,
     backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: Radius.full,
+    zIndex: 5,
   },
   photoAngleText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.3,
+  },
+  heroUrgentBadge: {
+    position: 'absolute',
+    left: Spacing.four,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: Radius.full,
+    gap: 3,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  heroUrgentText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
   },
   heroDealTagContainer: {
     position: 'absolute',
@@ -645,8 +707,10 @@ const styles = StyleSheet.create({
     zIndex: 5,
   },
   heroDealBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
     borderRadius: Radius.full,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -656,13 +720,13 @@ const styles = StyleSheet.create({
   },
   heroDealPriceText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     letterSpacing: -0.2,
   },
   heroDealText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   paginationRow: {
@@ -710,7 +774,44 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     lineHeight: 26,
-    marginBottom: Spacing.two + 2,
+    marginBottom: 6,
+  },
+  priceAndStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: Spacing.three,
+  },
+  mainPriceText: {
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.4,
+  },
+  bodyUrgentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  bodyUrgentText: {
+    color: '#DC2626',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  tradeTypePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  tradeTypePillText: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   metaRow: {
     flexDirection: 'row',

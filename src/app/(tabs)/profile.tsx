@@ -16,17 +16,44 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
+import { useThemeContext } from '@/context/theme-context';
 import { useItems } from '@/context/items-context';
 import { INITIAL_GREEN_IMPACT } from '@/data/mock-items';
 import { EscrowTransaction, MarketplaceItem } from '@/types/item';
+
+const GCASH_LOGO = require('@/assets/gcash.svg');
+const MAYA_LOGO = require('@/assets/maya.svg');
+
+const AVATAR_PRESETS = [
+  {
+    title: 'Student 1',
+    uri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+  },
+  {
+    title: 'Student 2',
+    uri: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80',
+  },
+  {
+    title: 'Student 3',
+    uri: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&q=80',
+  },
+  {
+    title: 'Student 4',
+    uri: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
+  },
+];
+
+const YEAR_LEVEL_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year', 'Graduate'];
 
 type ListingTab = 'active' | 'sold' | 'purchases';
 type CashOutChannel = 'gcash' | 'maya';
 
 export default function ProfileScreen() {
   const theme = useTheme();
+  const { themeMode, setThemeMode } = useThemeContext();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const {
@@ -39,8 +66,11 @@ export default function ProfileScreen() {
     cashOut,
   } = useItems();
 
-  // Content tab: Active Listings, Sold, Purchases (Mental model of marketplace items)
+  // Content tab: Active Listings, Sold, Purchases
   const [activeTab, setActiveTab] = useState<ListingTab>('active');
+
+  // Listing Management Modal (Replaces cramped 5-button card dock)
+  const [manageItem, setManageItem] = useState<MarketplaceItem | null>(null);
 
   // Cash-Out Modal State (Clean Slate Invariant: starts unselected null)
   const [isCashOutModalVisible, setIsCashOutModalVisible] = useState(false);
@@ -54,8 +84,22 @@ export default function ProfileScreen() {
     channel: string;
   } | null>(null);
 
-  // Escrow Ledger Modal
+  // Escrow Ledger Modal (Moved to Preferences)
   const [isLedgerModalVisible, setIsLedgerModalVisible] = useState(false);
+
+  // Payment Details Modal State
+  const [isPaymentDetailsModalVisible, setIsPaymentDetailsModalVisible] = useState(false);
+  const [defaultPayoutChannel, setDefaultPayoutChannel] = useState<CashOutChannel>('gcash');
+  const [defaultPayoutNumber, setDefaultPayoutNumber] = useState('0917 824 5519');
+  const [tempPayoutChannel, setTempPayoutChannel] = useState<CashOutChannel>(defaultPayoutChannel);
+  const [tempPayoutNumber, setTempPayoutNumber] = useState(defaultPayoutNumber);
+
+  // Change Password Modal State
+  const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Escrow Explainer Modal
   const [isEscrowGuideVisible, setIsEscrowGuideVisible] = useState(false);
@@ -65,15 +109,32 @@ export default function ProfileScreen() {
   const [preferredSpot, setPreferredSpot] = useState('Nursing Bldg Lobby (Burns Hall)');
   const [tempSpot, setTempSpot] = useState(preferredSpot);
 
+  // Student Profile Identity State
+  const [profileName, setProfileName] = useState('Maria Santos');
+  const [profileDegree, setProfileDegree] = useState('BS Nursing');
+  const [profileYearLevel, setProfileYearLevel] = useState('3rd Year');
+  const [profileAvatarUri, setProfileAvatarUri] = useState<string | null>(null);
+
+  // Edit Profile Details Modal State
+  const [isEditProfileModalVisible, setIsEditProfileModalVisible] = useState(false);
+  const [tempProfileName, setTempProfileName] = useState(profileName);
+  const [tempProfileDegree, setTempProfileDegree] = useState(profileDegree);
+  const [tempProfileYearLevel, setTempProfileYearLevel] = useState(profileYearLevel);
+  const [tempAvatarUri, setTempAvatarUri] = useState<string | null>(profileAvatarUri);
+
+  // Profile Photo Picker Modal State (Same file picker found in sell)
+  const [isPhotoPickerModalVisible, setIsPhotoPickerModalVisible] = useState(false);
+
   // Settings toggles
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+  const [isAppearanceModalVisible, setIsAppearanceModalVisible] = useState(false);
 
   // Action feedback toast
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // Filter items owned by current student ('Maria Santos' or 'You')
+  // Filter items owned by current student ('Maria Santos' or profileName or 'You')
   const userItems = items.filter(
-    (item) => item.sellerName === 'Maria Santos' || item.sellerName === 'You'
+    (item) => item.sellerName === profileName || item.sellerName === 'Maria Santos' || item.sellerName === 'You'
   );
   const activeListings = userItems.filter((i) => i.status !== 'sold');
   const soldListings = userItems.filter((i) => i.status === 'sold');
@@ -93,17 +154,20 @@ export default function ProfileScreen() {
     },
   ];
 
-  // Handle Listing Bump (Goal #6)
+  // Handle Listing Bump
   const handleBump = (item: MarketplaceItem) => {
     bumpItem(item.id);
-    setActionFeedback(`"${item.title.substring(0, 22)}..." bumped to top of feed!`);
+    setActionFeedback(`"${item.title.substring(0, 24)}..." bumped to top of feed!`);
     setTimeout(() => setActionFeedback(null), 3500);
   };
 
-  // Handle Urgent Selling Badge Toggle (Goal #6)
+  // Handle Urgent Toggle
   const handleToggleUrgent = (item: MarketplaceItem) => {
     toggleUrgent(item.id);
     const newState = !item.isUrgent;
+    if (manageItem?.id === item.id) {
+      setManageItem({ ...manageItem, isUrgent: newState });
+    }
     setActionFeedback(
       newState
         ? `Urgent Selling badge added! Highlighted across Marketplace.`
@@ -117,6 +181,9 @@ export default function ProfileScreen() {
     const isCurrentlyReserved = item.isReserved || item.status === 'reserved';
     const newStatus = isCurrentlyReserved ? 'active' : 'reserved';
     setItemStatus(item.id, newStatus);
+    if (manageItem?.id === item.id) {
+      setManageItem({ ...manageItem, status: newStatus, isReserved: newStatus === 'reserved' });
+    }
     setActionFeedback(
       newStatus === 'reserved'
         ? `Marked as Reserved. Buyers see reservation tag.`
@@ -128,7 +195,8 @@ export default function ProfileScreen() {
   // Handle Mark Sold
   const handleMarkSold = (item: MarketplaceItem) => {
     setItemStatus(item.id, 'sold');
-    setActionFeedback(`"${item.title.substring(0, 22)}..." marked as Sold!`);
+    setManageItem(null);
+    setActionFeedback(`"${item.title.substring(0, 24)}..." marked as Sold!`);
     setTimeout(() => setActionFeedback(null), 3000);
   };
 
@@ -144,6 +212,7 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: () => {
             deleteItem(item.id);
+            setManageItem(null);
             setActionFeedback('Listing removed.');
             setTimeout(() => setActionFeedback(null), 3000);
           },
@@ -217,6 +286,41 @@ export default function ProfileScreen() {
     }
   };
 
+  // Save Payment Details
+  const handleSavePaymentDetails = () => {
+    if (!tempPayoutNumber.trim() || tempPayoutNumber.trim().length < 10) {
+      Alert.alert('Invalid Mobile Number', 'Please enter a valid 11-digit mobile number.');
+      return;
+    }
+    setDefaultPayoutChannel(tempPayoutChannel);
+    setDefaultPayoutNumber(tempPayoutNumber.trim());
+    setIsPaymentDetailsModalVisible(false);
+    setActionFeedback('Payment and payout details updated.');
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
+  // Change Password
+  const handleChangePassword = () => {
+    if (!currentPassword) {
+      Alert.alert('Required Field', 'Please enter your current password.');
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      Alert.alert('Password Length', 'New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Password Mismatch', 'New password and confirmation do not match.');
+      return;
+    }
+    setIsChangePasswordModalVisible(false);
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setActionFeedback('Password updated successfully.');
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
   // Log Out confirmation
   const handleSignOut = () => {
     Alert.alert('Log Out', 'Are you sure you want to log out of your student account?', [
@@ -229,6 +333,121 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // Photo Picker: Choose from Library
+  const handlePickAvatarFromLibrary = async () => {
+    setIsPhotoPickerModalVisible(false);
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Photo Library Access Required',
+          'CampusGreen needs permission to access your photo library so you can upload your student profile picture.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const pickedUri = result.assets[0].uri;
+        setProfileAvatarUri(pickedUri);
+        setTempAvatarUri(pickedUri);
+        setActionFeedback('Profile photo updated.');
+        setTimeout(() => setActionFeedback(null), 3000);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to open photo library. Please try again.');
+    }
+  };
+
+  // Photo Picker: Take Photo with Camera
+  const handleTakeAvatarPhoto = async () => {
+    setIsPhotoPickerModalVisible(false);
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Camera Access Required',
+          'CampusGreen needs camera permission so you can take a profile photo.'
+        );
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const capturedUri = result.assets[0].uri;
+        setProfileAvatarUri(capturedUri);
+        setTempAvatarUri(capturedUri);
+        setActionFeedback('Profile photo updated.');
+        setTimeout(() => setActionFeedback(null), 3000);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to launch camera. Please try again.');
+    }
+  };
+
+  // Photo Picker: Select Preset
+  const handleSelectAvatarPreset = (uri: string) => {
+    setIsPhotoPickerModalVisible(false);
+    setProfileAvatarUri(uri);
+    setTempAvatarUri(uri);
+    setActionFeedback('Profile photo updated.');
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
+  // Photo Picker: Remove
+  const handleRemoveAvatarPhoto = () => {
+    setIsPhotoPickerModalVisible(false);
+    setProfileAvatarUri(null);
+    setTempAvatarUri(null);
+    setActionFeedback('Custom photo removed.');
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
+  // Save Edit Profile Details
+  const handleSaveProfile = () => {
+    if (!tempProfileName.trim()) {
+      Alert.alert('Name Required', 'Please enter your student name.');
+      return;
+    }
+    setProfileName(tempProfileName.trim());
+    setProfileDegree(tempProfileDegree.trim());
+    setProfileYearLevel(tempProfileYearLevel);
+    setProfileAvatarUri(tempAvatarUri);
+    setIsEditProfileModalVisible(false);
+    setActionFeedback('Student profile details updated.');
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
+  // Category Icon Resolver
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'Uniforms & Scrubs':
+        return 'shirt-outline';
+      case 'Textbooks & Reviewers':
+        return 'book-outline';
+      case 'Tools & Lab Equipment':
+        return 'calculator-outline';
+      case 'Dorm & Room Essentials':
+        return 'bed-outline';
+      case 'Tech & Study Gadgets':
+        return 'laptop-outline';
+      default:
+        return 'cube-outline';
+    }
+  };
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <ScrollView
@@ -236,37 +455,128 @@ export default function ProfileScreen() {
         contentContainerStyle={[
           styles.scrollContent,
           {
-            paddingTop: insets.top + Spacing.four,
-            paddingBottom: insets.bottom + 110,
+            paddingTop: insets.top + Spacing.three,
+            paddingBottom: insets.bottom + 100,
           },
         ]}>
-        {/* ================= TOP HEADER (TITLE + SETTINGS SHORTCUT) ================= */}
-        <View style={styles.topHeaderBar}>
-          <View>
-            <Text style={[styles.largeTitle, { color: theme.text }]}>Profile</Text>
-            <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
-              Verified Campus Student Hub
-            </Text>
+        {/* ================= 1. REFINED STUDENT PROFILE HEADER ================= */}
+        <View
+          style={[
+            styles.studentProfileCard,
+            { backgroundColor: theme.surface, borderColor: theme.border },
+          ]}>
+          <View style={styles.studentInfoRow}>
+            {/* Student Avatar with Camera/Pen Edit Overlay */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Change profile picture"
+              style={styles.avatarPressable}
+              onPress={() => setIsPhotoPickerModalVisible(true)}>
+              <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
+                {profileAvatarUri ? (
+                  <Image
+                    source={{ uri: profileAvatarUri }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                  />
+                ) : (
+                  <Text style={styles.avatarInitials}>
+                    {profileName
+                      .split(' ')
+                      .map((n) => n[0])
+                      .join('')
+                      .toUpperCase()
+                      .substring(0, 2) || 'MS'}
+                  </Text>
+                )}
+              </View>
+
+              {/* Pen / Camera Badge on Avatar */}
+              <View
+                style={[
+                  styles.avatarPenBadge,
+                  { backgroundColor: theme.primary, borderColor: theme.surface },
+                ]}>
+                <Ionicons name="camera" size={10} color="#FFFFFF" />
+              </View>
+            </Pressable>
+
+            {/* Name & Academic Meta */}
+            <View style={styles.studentMeta}>
+              <View style={styles.nameAndStatusRow}>
+                <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>
+                  {profileName}
+                </Text>
+                <View style={[styles.verifiedTag, { backgroundColor: theme.badgeGreenBg }]}>
+                  <Text style={[styles.verifiedTagText, { color: theme.badgeGreenText }]}>
+                    Verified
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={[styles.studentDegree, { color: theme.textSecondary }]} numberOfLines={1}>
+                {profileDegree} • {profileYearLevel}
+              </Text>
+              <Text style={[styles.studentCampus, { color: theme.primary }]} numberOfLines={1}>
+                Ateneo de Naga University
+              </Text>
+            </View>
+
+            {/* Edit Profile Pen Button */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile details"
+              style={[
+                styles.editProfilePenBtn,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}
+              onPress={() => {
+                setTempProfileName(profileName);
+                setTempProfileDegree(profileDegree);
+                setTempProfileYearLevel(profileYearLevel);
+                setTempAvatarUri(profileAvatarUri);
+                setIsEditProfileModalVisible(true);
+              }}>
+              <Ionicons name="pencil" size={14} color={theme.text} />
+            </Pressable>
           </View>
 
-          {/* Quick Settings Icon Button */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Open Account Settings"
+          {/* Unified Reputation & Green Impact Matrix */}
+          <View
             style={[
-              styles.settingsIconBtn,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-            onPress={() => {
-              // Scrolls smoothly to the settings section at the bottom
-              Alert.alert(
-                'CampusGreen Settings',
-                `Institutional Account: msantos@gbox.adnu.edu.ph\nCampus: Ateneo de Naga University\nStatus: Verified Student`,
-                [{ text: 'OK' }]
-              );
-            }}>
-            <Ionicons name="settings-outline" size={20} color={theme.text} />
-          </Pressable>
+              styles.metricsMatrix,
+              { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
+            ]}>
+            {/* Metric 1: Trust Rating */}
+            <View style={styles.matrixItem}>
+              <View style={styles.metricRow}>
+                <Ionicons name="star" size={13} color={theme.gold} style={{ marginRight: 3 }} />
+                <Text style={[styles.matrixVal, { color: theme.text }]}>4.9</Text>
+              </View>
+              <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>24 Reviews</Text>
+            </View>
+
+            <View style={[styles.matrixDivider, { backgroundColor: theme.border }]} />
+
+            {/* Metric 2: Meetup Completion */}
+            <View style={styles.matrixItem}>
+              <Text style={[styles.matrixVal, { color: theme.primary }]}>100%</Text>
+              <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>Meetups</Text>
+            </View>
+
+            <View style={[styles.matrixDivider, { backgroundColor: theme.border }]} />
+
+            {/* Metric 3: Carbon Saved */}
+            <View style={styles.matrixItem}>
+              <View style={styles.metricRow}>
+                <Ionicons name="leaf" size={13} color={theme.primary} style={{ marginRight: 3 }} />
+                <Text style={[styles.matrixVal, { color: theme.primaryDark }]}>
+                  {INITIAL_GREEN_IMPACT.userCo2SavedKg}kg
+                </Text>
+              </View>
+              <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>CO₂ Saved</Text>
+            </View>
+          </View>
         </View>
 
         {/* Action Feedback Banner */}
@@ -276,128 +586,26 @@ export default function ProfileScreen() {
               styles.feedbackBanner,
               { backgroundColor: theme.badgeGreenBg, borderColor: theme.primary },
             ]}>
-            <Ionicons name="checkmark-circle" size={18} color={theme.primary} />
+            <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
             <Text style={[styles.feedbackBannerText, { color: theme.primaryDark }]}>
               {actionFeedback}
             </Text>
           </View>
         )}
 
-        {/* ================= 1. STUDENT IDENTITY & REPUTATION CARD ================= */}
-        <View
-          style={[
-            styles.identityCard,
-            {
-              backgroundColor: theme.surface,
-              borderColor: theme.border,
-            },
-          ]}>
-          <View style={styles.identityTopRow}>
-            {/* Student Avatar */}
-            <View style={[styles.avatarCircle, { backgroundColor: theme.primary }]}>
-              <Text style={styles.avatarInitials}>MS</Text>
-              <View style={styles.verifiedShieldBadge}>
-                <Ionicons name="shield-checkmark" size={13} color="#FFFFFF" />
-              </View>
-            </View>
-
-            {/* Student Details */}
-            <View style={styles.identityDetails}>
-              <View style={styles.nameRow}>
-                <Text style={[styles.studentName, { color: theme.text }]}>Maria Santos</Text>
-                <View style={[styles.verifiedTag, { backgroundColor: theme.badgeGreenBg }]}>
-                  <Text style={[styles.verifiedTagText, { color: theme.badgeGreenText }]}>
-                    Verified Student
-                  </Text>
-                </View>
-              </View>
-
-              <Text style={[styles.degreeProgram, { color: theme.textSecondary }]}>
-                BS Nursing • 3rd Year
-              </Text>
-              <Text style={[styles.campusText, { color: theme.primary }]}>
-                Ateneo de Naga University
-              </Text>
-            </View>
-          </View>
-
-          {/* Trust & Reputation Metrics */}
-          <View
-            style={[
-              styles.reputationMetricsRow,
-              { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
-            ]}>
-            <View style={styles.reputationMetricItem}>
-              <View style={styles.metricValRow}>
-                <Ionicons name="star" size={15} color={theme.gold} style={{ marginRight: 3 }} />
-                <Text style={[styles.metricValText, { color: theme.text }]}>4.9</Text>
-              </View>
-              <Text style={[styles.metricLabelText, { color: theme.textSecondary }]}>
-                24 Reviews
-              </Text>
-            </View>
-
-            <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.reputationMetricItem}>
-              <Text style={[styles.metricValText, { color: theme.primary }]}>100%</Text>
-              <Text style={[styles.metricLabelText, { color: theme.textSecondary }]}>
-                Meetup Rate
-              </Text>
-            </View>
-
-            <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
-
-            <View style={styles.reputationMetricItem}>
-              <Text style={[styles.metricValText, { color: theme.text }]}>0</Text>
-              <Text style={[styles.metricLabelText, { color: theme.textSecondary }]}>
-                Disputes
-              </Text>
-            </View>
-          </View>
-
-          {/* Personal Green Impact Mini-Strip */}
-          <View style={styles.greenImpactStrip}>
-            <View style={styles.greenImpactItem}>
-              <Ionicons name="leaf-outline" size={14} color={theme.primary} />
-              <Text style={[styles.greenImpactLabel, { color: theme.textSecondary }]}>
-                {INITIAL_GREEN_IMPACT.userCo2SavedKg} kg CO₂ saved
-              </Text>
-            </View>
-            <Text style={{ color: theme.textMuted }}>•</Text>
-            <View style={styles.greenImpactItem}>
-              <Ionicons name="repeat-outline" size={14} color={theme.primary} />
-              <Text style={[styles.greenImpactLabel, { color: theme.textSecondary }]}>
-                {INITIAL_GREEN_IMPACT.userItemsReused} items reused
-              </Text>
-            </View>
-            <Text style={{ color: theme.textMuted }}>•</Text>
-            <View style={styles.greenImpactItem}>
-              <Ionicons name="wallet-outline" size={14} color={theme.primary} />
-              <Text style={[styles.greenImpactLabel, { color: theme.textSecondary }]}>
-                ₱{INITIAL_GREEN_IMPACT.userMoneySavedPhp} saved
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ================= 2. REDESIGNED ESCROW WALLET CARD ================= */}
+        {/* ================= 2. ESCROW WALLET CARD ================= */}
         <View
           style={[
             styles.escrowWalletCard,
-            {
-              backgroundColor: theme.surface,
-              borderColor: theme.border,
-            },
+            { backgroundColor: theme.surface, borderColor: theme.border },
           ]}>
-          {/* Wallet Card Header */}
           <View style={styles.walletHeaderRow}>
             <View style={styles.walletTitleGroup}>
               <View style={[styles.walletIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                <Ionicons name="shield-checkmark" size={20} color={theme.primary} />
+                <Ionicons name="shield-checkmark" size={18} color={theme.primary} />
               </View>
               <View>
-                <Text style={[styles.walletTitle, { color: theme.text }]}>Campus Escrow Wallet</Text>
+                <Text style={[styles.walletTitle, { color: theme.text }]}>Escrow Wallet</Text>
                 <Text style={[styles.walletSubtitle, { color: theme.textSecondary }]}>
                   Buyer Protection & Cleared Funds
                 </Text>
@@ -406,78 +614,72 @@ export default function ProfileScreen() {
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="How Escrow Protection Works"
-              style={styles.escrowInfoBadge}
+              accessibilityLabel="How escrow protection works"
+              style={[
+                styles.escrowInfoBadge,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
+              ]}
               onPress={() => setIsEscrowGuideVisible(true)}>
-              <Ionicons name="help-circle-outline" size={16} color={theme.primary} />
-              <Text style={[styles.escrowInfoBadgeText, { color: theme.primary }]}>How it works</Text>
+              <Ionicons name="help-circle-outline" size={14} color={theme.primary} />
+              <Text style={[styles.escrowInfoBadgeText, { color: theme.primary }]}>Guide</Text>
             </Pressable>
           </View>
 
-          {/* Main Balance Display */}
-          <View style={styles.mainBalanceSection}>
-            <Text style={[styles.mainBalanceLabel, { color: theme.textSecondary }]}>
-              AVAILABLE FOR CASH-OUT
-            </Text>
-            <Text style={[styles.mainBalanceFigure, { color: theme.text }]}>
-              ₱{wallet.availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-            </Text>
+          {/* Balance figures (Clean, uncluttered display) */}
+          <View style={styles.balanceSection}>
+            <View style={styles.balanceMainRow}>
+              <Text style={[styles.balanceSmallLabel, { color: theme.textSecondary }]}>
+                AVAILABLE FOR CASH-OUT
+              </Text>
+              <Text style={[styles.balanceMainAmount, { color: theme.text }]}>
+                ₱{wallet.availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </Text>
+            </View>
 
-            {/* In Escrow Pill (Funds pending physical handover inspection) */}
+            {/* In Escrow Pill */}
             <View
               style={[
                 styles.inEscrowPill,
                 { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
               ]}>
-              <Ionicons name="lock-closed" size={14} color={theme.gold} style={{ marginRight: 6 }} />
+              <Ionicons name="lock-closed" size={13} color={theme.gold} style={{ marginRight: 6 }} />
               <Text style={[styles.inEscrowPillText, { color: theme.textSecondary }]}>
                 <Text style={{ fontWeight: '700', color: theme.text }}>
                   ₱{wallet.inEscrowBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </Text>{' '}
-                locked in escrow (pending meetup inspection)
+                pending physical meetup inspection
               </Text>
             </View>
           </View>
 
-          {/* Generously Spaced Action Dock */}
-          <View style={styles.walletActionDock}>
-            {/* Primary Cash Out Button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Cash out available escrow funds"
-              style={[styles.primaryCashOutBtn, { backgroundColor: theme.primary }]}
-              onPress={() => setIsCashOutModalVisible(true)}>
-              <Ionicons name="arrow-up-circle" size={19} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.primaryCashOutBtnText}>Cash Out Funds</Text>
-            </Pressable>
-
-            {/* Secondary Escrow Ledger Button */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="View escrow transactions ledger"
-              style={[
-                styles.secondaryLedgerBtn,
-                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
-              ]}
-              onPress={() => setIsLedgerModalVisible(true)}>
-              <Ionicons name="receipt-outline" size={17} color={theme.text} style={{ marginRight: 5 }} />
-              <Text style={[styles.secondaryLedgerBtnText, { color: theme.text }]}>
-                Transaction Ledger
-              </Text>
-            </Pressable>
-          </View>
+          {/* Primary Cash Out Button */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Cash out available escrow funds to GCash or Maya"
+            style={[styles.primaryCashOutBtn, { backgroundColor: theme.primary }]}
+            onPress={() => {
+              if (!cashOutAccount) {
+                setCashOutAccount(defaultPayoutNumber);
+              }
+              if (!cashOutChannel) {
+                setCashOutChannel(defaultPayoutChannel);
+              }
+              setIsCashOutModalVisible(true);
+            }}>
+            <Ionicons name="arrow-up-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.primaryCashOutBtnText}>Cash Out to GCash / Maya</Text>
+          </Pressable>
 
           {/* Fee Notice */}
           <View style={[styles.walletFooterNotice, { borderTopColor: theme.borderSubtle }]}>
-            <Ionicons name="checkmark-done-circle" size={15} color={theme.primary} />
+            <Ionicons name="checkmark-done-circle" size={14} color={theme.primary} />
             <Text style={[styles.walletFooterNoticeText, { color: theme.textSecondary }]}>
-              ₱0 student fee to GCash & Maya • Funds auto-release upon meetup verification
+              ₱0 student fee • Funds auto-release upon meetup verification
             </Text>
           </View>
         </View>
 
         {/* ================= 3. MARKETPLACE LISTINGS SEGMENT TABS ================= */}
-        {/* Adheres to standard mental models: Active, Sold, Purchases */}
         <View style={styles.segmentedTabsContainer}>
           <Pressable
             accessibilityRole="tab"
@@ -494,7 +696,7 @@ export default function ProfileScreen() {
                 styles.segmentTabText,
                 {
                   color: activeTab === 'active' ? '#FFFFFF' : theme.textSecondary,
-                  fontWeight: activeTab === 'active' ? '700' : '500',
+                  fontWeight: activeTab === 'active' ? '700' : '600',
                 },
               ]}>
               Active ({activeListings.length})
@@ -516,7 +718,7 @@ export default function ProfileScreen() {
                 styles.segmentTabText,
                 {
                   color: activeTab === 'sold' ? '#FFFFFF' : theme.textSecondary,
-                  fontWeight: activeTab === 'sold' ? '700' : '500',
+                  fontWeight: activeTab === 'sold' ? '700' : '600',
                 },
               ]}>
               Sold ({soldListings.length})
@@ -538,48 +740,27 @@ export default function ProfileScreen() {
                 styles.segmentTabText,
                 {
                   color: activeTab === 'purchases' ? '#FFFFFF' : theme.textSecondary,
-                  fontWeight: activeTab === 'purchases' ? '700' : '500',
+                  fontWeight: activeTab === 'purchases' ? '700' : '600',
                 },
               ]}>
-              My Orders ({studentPurchases.length})
+              Orders ({studentPurchases.length})
             </Text>
           </Pressable>
         </View>
 
-        {/* ================= 4. TAB 1: ACTIVE LISTINGS & GROWTH TOOLS (GOAL #6) ================= */}
+        {/* ================= 4. TAB 1: ACTIVE LISTINGS ================= */}
         {activeTab === 'active' && (
           <View style={styles.tabContentBlock}>
-            {/* Seller Success Growth Banner */}
-            <View
-              style={[
-                styles.growthPromoCard,
-                { backgroundColor: theme.badgeGreenBg, borderColor: theme.primaryLight },
-              ]}>
-              <View style={styles.growthPromoHeader}>
-                <Ionicons name="rocket" size={17} color={theme.primary} />
-                <Text style={[styles.growthPromoTitle, { color: theme.primaryDark }]}>
-                  Seller Success Growth Tools
-                </Text>
-              </View>
-              <Text style={[styles.growthPromoBody, { color: theme.primaryDark }]}>
-                Need to sell fast before exam week or dorm move-out? Use{' '}
-                <Text style={{ fontWeight: '700' }}>Listing Bumps</Text> to jump to the top of the feed
-                and toggle <Text style={{ fontWeight: '700' }}>Urgent Selling Badges</Text> for 3x higher
-                campus visibility.
-              </Text>
-            </View>
-
-            {/* Active Items List */}
             {activeListings.length === 0 ? (
               <View
                 style={[
                   styles.emptyStateBox,
                   { backgroundColor: theme.surface, borderColor: theme.border },
                 ]}>
-                <Ionicons name="cube-outline" size={38} color={theme.textMuted} />
-                <Text style={[styles.emptyStateTitle, { color: theme.text }]}>No active items</Text>
+                <Ionicons name="cube-outline" size={36} color={theme.textMuted} />
+                <Text style={[styles.emptyStateTitle, { color: theme.text }]}>No active listings</Text>
                 <Text style={[styles.emptyStateSubtitle, { color: theme.textSecondary }]}>
-                  List pre-loved uniforms, books, or gear to earn cash and reduce campus waste.
+                  List pre-loved uniforms, books, or tools to earn cash and reduce campus waste.
                 </Text>
                 <Pressable
                   style={[styles.emptyStateBtn, { backgroundColor: theme.primary }]}
@@ -606,13 +787,7 @@ export default function ProfileScreen() {
                         />
                       ) : (
                         <Ionicons
-                          name={
-                            item.category === 'Uniforms & Scrubs'
-                              ? 'shirt-outline'
-                              : item.category === 'Textbooks & Reviewers'
-                              ? 'book-outline'
-                              : 'cube-outline'
-                          }
+                          name={getCategoryIcon(item.category)}
                           size={28}
                           color={theme.primary}
                         />
@@ -654,7 +829,7 @@ export default function ProfileScreen() {
                           </Text>
                         </View>
 
-                        {/* Actionable Urgent Badge */}
+                        {/* Urgent Badge */}
                         {item.isUrgent && (
                           <View style={[styles.urgentBadgeTag, { backgroundColor: '#DC2626' }]}>
                             <Ionicons name="flash" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
@@ -681,21 +856,21 @@ export default function ProfileScreen() {
                       {/* Performance Counters */}
                       <View style={styles.listingStatsRow}>
                         <View style={styles.statMiniItem}>
-                          <Ionicons name="eye-outline" size={13} color={theme.textMuted} />
+                          <Ionicons name="eye-outline" size={12} color={theme.textMuted} />
                           <Text style={[styles.statMiniText, { color: theme.textMuted }]}>
-                            {item.viewsCount ?? 142} views
+                            {item.viewsCount ?? 142}
                           </Text>
                         </View>
                         <Text style={{ color: theme.border }}>•</Text>
                         <View style={styles.statMiniItem}>
-                          <Ionicons name="chatbubble-outline" size={13} color={theme.textMuted} />
+                          <Ionicons name="chatbubble-outline" size={12} color={theme.textMuted} />
                           <Text style={[styles.statMiniText, { color: theme.textMuted }]}>
-                            {item.inquiriesCount ?? 6} inquiries
+                            {item.inquiriesCount ?? 6}
                           </Text>
                         </View>
                         <Text style={{ color: theme.border }}>•</Text>
                         <View style={styles.statMiniItem}>
-                          <Ionicons name="arrow-up-circle-outline" size={13} color={theme.primary} />
+                          <Ionicons name="arrow-up-circle-outline" size={12} color={theme.primary} />
                           <Text style={[styles.statMiniText, { color: theme.primary, fontWeight: '700' }]}>
                             {item.bumpCount ?? 0} bumps
                           </Text>
@@ -704,89 +879,34 @@ export default function ProfileScreen() {
                     </View>
                   </View>
 
-                  {/* Growth Tools & Action Dock */}
-                  <View style={[styles.growthToolsDock, { borderTopColor: theme.borderSubtle }]}>
-                    {/* Tool 1: Listing Bump */}
+                  {/* Refactored Mobile Action Dock: 2 Ergonomic Touch Targets */}
+                  <View style={[styles.ergonomicActionDock, { borderTopColor: theme.borderSubtle }]}>
+                    {/* Action 1: Bump to Top */}
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Bump listing to top of discovery feed"
+                      accessibilityLabel={`Bump "${item.title}" to top of discovery feed`}
                       style={[
-                        styles.growthToolBtn,
+                        styles.bumpBtn,
                         { backgroundColor: theme.primaryLight, borderColor: theme.primary },
                       ]}
                       onPress={() => handleBump(item)}>
-                      <Ionicons name="arrow-up" size={15} color={theme.primary} />
-                      <Text style={[styles.growthToolBtnText, { color: theme.primary }]}>Bump to Top</Text>
+                      <Ionicons name="arrow-up-circle" size={16} color={theme.primary} />
+                      <Text style={[styles.bumpBtnText, { color: theme.primary }]}>Bump to Top</Text>
                     </Pressable>
 
-                    {/* Tool 2: Urgent Selling Badge Toggle */}
+                    {/* Action 2: Manage Listing Modal Sheet */}
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Toggle urgent selling badge"
+                      accessibilityLabel={`Manage listing status and settings for "${item.title}"`}
                       style={[
-                        styles.growthToolBtn,
-                        {
-                          backgroundColor: item.isUrgent ? '#FEE2E2' : theme.surfaceSubtle,
-                          borderColor: item.isUrgent ? '#DC2626' : theme.border,
-                        },
-                      ]}
-                      onPress={() => handleToggleUrgent(item)}>
-                      <Ionicons
-                        name="flash-outline"
-                        size={15}
-                        color={item.isUrgent ? '#DC2626' : theme.textSecondary}
-                      />
-                      <Text
-                        style={[
-                          styles.growthToolBtnText,
-                          { color: item.isUrgent ? '#DC2626' : theme.textSecondary },
-                        ]}>
-                        {item.isUrgent ? 'Urgent On' : 'Set Urgent'}
-                      </Text>
-                    </Pressable>
-
-                    {/* Action 3: Mark Reserved */}
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Toggle reserved status"
-                      style={[
-                        styles.growthToolBtn,
-                        {
-                          backgroundColor: item.isReserved ? theme.border : theme.surfaceSubtle,
-                          borderColor: theme.border,
-                        },
-                      ]}
-                      onPress={() => handleToggleReserved(item)}>
-                      <Ionicons
-                        name={item.isReserved ? 'lock-open-outline' : 'lock-closed-outline'}
-                        size={14}
-                        color={theme.textSecondary}
-                      />
-                      <Text style={[styles.growthToolBtnText, { color: theme.textSecondary }]}>
-                        {item.isReserved ? 'Unreserve' : 'Reserve'}
-                      </Text>
-                    </Pressable>
-
-                    {/* Action 4: Mark Sold */}
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Mark item as sold"
-                      style={[
-                        styles.growthToolBtn,
+                        styles.manageListingBtn,
                         { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
                       ]}
-                      onPress={() => handleMarkSold(item)}>
-                      <Ionicons name="checkmark-done" size={15} color={theme.primary} />
-                      <Text style={[styles.growthToolBtnText, { color: theme.primary }]}>Sold</Text>
-                    </Pressable>
-
-                    {/* Action 5: Delete */}
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel="Delete listing"
-                      style={styles.deleteListingBtn}
-                      onPress={() => handleDeleteConfirm(item)}>
-                      <Ionicons name="trash-outline" size={16} color={theme.error} />
+                      onPress={() => setManageItem(item)}>
+                      <Ionicons name="ellipsis-horizontal" size={16} color={theme.text} />
+                      <Text style={[styles.manageListingBtnText, { color: theme.text }]}>
+                        Manage
+                      </Text>
                     </Pressable>
                   </View>
                 </View>
@@ -804,7 +924,7 @@ export default function ProfileScreen() {
                   styles.emptyStateBox,
                   { backgroundColor: theme.surface, borderColor: theme.border },
                 ]}>
-                <Ionicons name="checkmark-circle-outline" size={38} color={theme.textMuted} />
+                <Ionicons name="checkmark-circle-outline" size={36} color={theme.textMuted} />
                 <Text style={[styles.emptyStateTitle, { color: theme.text }]}>No sold items yet</Text>
                 <Text style={[styles.emptyStateSubtitle, { color: theme.textSecondary }]}>
                   When you complete meetups and handovers, your successfully transferred campus gear
@@ -821,12 +941,24 @@ export default function ProfileScreen() {
                   ]}>
                   <View style={styles.soldItemTopRow}>
                     <View style={[styles.soldItemThumb, { backgroundColor: theme.surfaceSubtle }]}>
-                      <Ionicons name="medkit-outline" size={26} color={theme.textMuted} />
+                      {item.imageUrl ? (
+                        <Image
+                          source={{ uri: item.imageUrl }}
+                          style={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                        />
+                      ) : (
+                        <Ionicons
+                          name={getCategoryIcon(item.category)}
+                          size={24}
+                          color={theme.primary}
+                        />
+                      )}
                     </View>
-                    <View style={{ flex: 1, gap: 3 }}>
+                    <View style={{ flex: 1, gap: 2 }}>
                       <View style={styles.soldBadgeRow}>
                         <View style={[styles.completedPill, { backgroundColor: theme.badgeGreenBg }]}>
-                          <Ionicons name="checkmark-circle" size={12} color={theme.primary} />
+                          <Ionicons name="checkmark-circle" size={11} color={theme.primary} />
                           <Text style={[styles.completedPillText, { color: theme.primary }]}>
                             Completed Trade
                           </Text>
@@ -837,7 +969,7 @@ export default function ProfileScreen() {
                         {item.title}
                       </Text>
                       <Text style={[styles.soldItemDate, { color: theme.textSecondary }]}>
-                        Verified Meetup at {item.safeMeetupSpot}
+                        Verified Meetup • {item.safeMeetupSpot}
                       </Text>
                     </View>
                   </View>
@@ -859,7 +991,7 @@ export default function ProfileScreen() {
                 ]}>
                 <View style={styles.purchaseHeader}>
                   <View style={styles.purchaseHeaderLeft}>
-                    <Ionicons name="shield-checkmark" size={16} color={theme.primary} />
+                    <Ionicons name="shield-checkmark" size={15} color={theme.primary} />
                     <Text style={[styles.purchaseRef, { color: theme.primary }]}>
                       {p.referenceCode}
                     </Text>
@@ -881,26 +1013,25 @@ export default function ProfileScreen() {
                     styles.purchaseSpotBox,
                     { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
                   ]}>
-                  <Ionicons name="location" size={15} color={theme.primary} />
+                  <Ionicons name="location" size={14} color={theme.primary} />
                   <Text style={[styles.purchaseSpotText, { color: theme.text }]}>
-                    Campus Safe Meetup: {p.safeMeetupSpot}
+                    Campus Meetup: {p.safeMeetupSpot}
                   </Text>
                 </View>
 
                 <Text style={[styles.purchaseDisclaimer, { color: theme.textMuted }]}>
-                  Your payment is locked safely in escrow. Inspect the item in person before confirming
-                  receipt. 72-hour auto-completion applies following meetup.
+                  Payment safely held in escrow. Inspect in person before confirmation.
                 </Text>
               </View>
             ))}
           </View>
         )}
 
-        {/* ================= 7. ACCOUNT PREFERENCES & CAMPUS SAFETY ================= */}
-        {/* Replaces the awkward "Settings as a tab" mental model with native grouped rows */}
+        {/* ================= 7. COMPREHENSIVE ACCOUNT PREFERENCES & SETTINGS ================= */}
+        {/* Houses transaction ledger, payout details, change password, safety & policies cleanly */}
         <View style={styles.accountSection}>
           <Text style={[styles.accountSectionHeading, { color: theme.text }]}>
-            Campus Safety & Account Preferences
+            Account & Security Preferences
           </Text>
 
           <View
@@ -908,7 +1039,86 @@ export default function ProfileScreen() {
               styles.groupedAccountCard,
               { backgroundColor: theme.surface, borderColor: theme.border },
             ]}>
-            {/* Row 1: Default Safe Meetup Spot */}
+            {/* Row 1: Escrow & Payout Ledger (Moved here per user request) */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="View Escrow and Payout Ledger"
+              style={styles.accountRow}
+              onPress={() => setIsLedgerModalVisible(true)}>
+              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
+                <Ionicons name="receipt-outline" size={17} color={theme.primary} />
+              </View>
+              <View style={styles.accountRowContent}>
+                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
+                  Escrow & Payout Ledger
+                </Text>
+                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
+                  History of locks, releases & disbursements
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
+            </Pressable>
+
+            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
+
+            {/* Row 2: Payment & Payout Details */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Manage linked payout methods"
+              style={styles.accountRow}
+              onPress={() => {
+                setTempPayoutChannel(defaultPayoutChannel);
+                setTempPayoutNumber(defaultPayoutNumber);
+                setIsPaymentDetailsModalVisible(true);
+              }}>
+              <View
+                style={[
+                  styles.accountRowIconCircle,
+                  {
+                    backgroundColor: defaultPayoutChannel === 'gcash' ? '#EFF6FF' : '#0A1810',
+                    borderWidth: 1,
+                    borderColor: defaultPayoutChannel === 'gcash' ? '#DBEAFE' : '#183824',
+                  },
+                ]}>
+                <Image
+                  source={defaultPayoutChannel === 'gcash' ? GCASH_LOGO : MAYA_LOGO}
+                  style={defaultPayoutChannel === 'gcash' ? styles.rowGcashLogo : styles.rowMayaLogo}
+                  contentFit="contain"
+                />
+              </View>
+              <View style={styles.accountRowContent}>
+                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
+                  Payout E-Wallet Details
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                  <Text style={[styles.accountRowValue, { color: theme.textSecondary }]} numberOfLines={1}>
+                    {defaultPayoutNumber}
+                  </Text>
+                  <View
+                    style={[
+                      styles.rowChannelBadge,
+                      {
+                        backgroundColor: defaultPayoutChannel === 'gcash' ? '#EFF6FF' : '#0A1810',
+                        borderColor: defaultPayoutChannel === 'gcash' ? '#DBEAFE' : '#183824',
+                      },
+                    ]}>
+                    <Image
+                      source={defaultPayoutChannel === 'gcash' ? GCASH_LOGO : MAYA_LOGO}
+                      style={defaultPayoutChannel === 'gcash' ? styles.badgeGcashLogo : styles.badgeMayaLogo}
+                      contentFit="contain"
+                    />
+                  </View>
+                  <Text style={[styles.accountRowValue, { color: theme.textMuted }]}>
+                    (Default)
+                  </Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
+            </Pressable>
+
+            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
+
+            {/* Row 3: Default Safe Meetup Spot */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Edit preferred campus safe meetup spot"
@@ -918,47 +1128,75 @@ export default function ProfileScreen() {
                 setIsEditSpotModalVisible(true);
               }}>
               <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                <Ionicons name="location-outline" size={18} color={theme.primary} />
+                <Ionicons name="location-outline" size={17} color={theme.primary} />
               </View>
               <View style={styles.accountRowContent}>
                 <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Preferred Safe Meetup Spot
+                  Safe Meetup Spot
                 </Text>
                 <Text style={[styles.accountRowValue, { color: theme.textSecondary }]} numberOfLines={1}>
                   {preferredSpot}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
             </Pressable>
 
             <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
 
-            {/* Row 2: Campus Institutional Verification */}
+            {/* Row 4: Change Password */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Change student account password"
+              style={styles.accountRow}
+              onPress={() => {
+                setCurrentPassword('');
+                setNewPassword('');
+                setConfirmPassword('');
+                setShowPassword(false);
+                setIsChangePasswordModalVisible(true);
+              }}>
+              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
+                <Ionicons name="key-outline" size={17} color={theme.text} />
+              </View>
+              <View style={styles.accountRowContent}>
+                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
+                  Change Password
+                </Text>
+                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
+                  Update your student account security credentials
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
+            </Pressable>
+
+            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
+
+            {/* Row 5: Campus Institutional Verification */}
             <View style={styles.accountRow}>
               <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                <Ionicons name="school-outline" size={18} color={theme.primary} />
+                <Ionicons name="school-outline" size={17} color={theme.primary} />
               </View>
               <View style={styles.accountRowContent}>
                 <Text style={[styles.accountRowTitle, { color: theme.text }]}>
                   Student Verification
                 </Text>
                 <Text style={[styles.accountRowValue, { color: theme.primary }]}>
-                  Active • Ateneo de Naga (.edu.ph)
+                  Verified • Ateneo de Naga (.edu.ph)
                 </Text>
               </View>
-              <Ionicons name="checkmark-circle" size={18} color={theme.primary} />
+              <Ionicons name="checkmark-circle" size={17} color={theme.primary} />
             </View>
 
             <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
 
-            {/* Row 3: Escrow Buyer & Seller Protection Guide */}
+            {/* Row 6: Escrow Buyer & Seller Protection Guide */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="View Escrow Protection Guide"
               style={styles.accountRow}
               onPress={() => setIsEscrowGuideVisible(true)}>
               <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
-                <Ionicons name="lock-closed-outline" size={18} color={theme.text} />
+                <Ionicons name="shield-checkmark-outline" size={17} color={theme.text} />
               </View>
               <View style={styles.accountRowContent}>
                 <Text style={[styles.accountRowTitle, { color: theme.text }]}>
@@ -968,22 +1206,22 @@ export default function ProfileScreen() {
                   How your payments and sales are safeguarded
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
             </Pressable>
 
             <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
 
-            {/* Row 4: Notifications Toggle */}
+            {/* Row 7: Notifications Toggle */}
             <View style={styles.accountRow}>
               <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
-                <Ionicons name="notifications-outline" size={18} color={theme.text} />
+                <Ionicons name="notifications-outline" size={17} color={theme.text} />
               </View>
               <View style={styles.accountRowContent}>
                 <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Escrow & Handover Alerts
+                  Handover & Payout Alerts
                 </Text>
                 <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  Instant push notices on payouts and meetup arrivals
+                  Push notices on payouts and meetup arrivals
                 </Text>
               </View>
               <Switch
@@ -996,30 +1234,221 @@ export default function ProfileScreen() {
 
             <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
 
-            {/* Row 5: Log Out */}
+            {/* Row 8: App Appearance (Light, Dark, System) */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Change app appearance theme"
+              style={styles.accountRow}
+              onPress={() => setIsAppearanceModalVisible(true)}>
+              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
+                <Ionicons
+                  name={themeMode === 'dark' ? 'moon-outline' : themeMode === 'light' ? 'sunny-outline' : 'contrast-outline'}
+                  size={17}
+                  color={theme.text}
+                />
+              </View>
+              <View style={styles.accountRowContent}>
+                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
+                  App Appearance
+                </Text>
+                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
+                  {themeMode === 'system' ? 'System Default' : themeMode === 'light' ? 'Light Theme' : 'Dark Theme'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
+            </Pressable>
+
+            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
+
+            {/* Row 9: Log Out */}
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Log out of student account"
               style={styles.accountRow}
               onPress={handleSignOut}>
               <View style={[styles.accountRowIconCircle, { backgroundColor: '#FEE2E2' }]}>
-                <Ionicons name="log-out-outline" size={18} color={theme.error} />
+                <Ionicons name="log-out-outline" size={17} color={theme.error} />
               </View>
               <View style={styles.accountRowContent}>
                 <Text style={[styles.accountRowTitle, { color: theme.error, fontWeight: '700' }]}>
                   Log Out
                 </Text>
                 <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  Signed in as msantos@gbox.adnu.edu.ph
+                  Sign out of this campus device
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
             </Pressable>
           </View>
         </View>
       </ScrollView>
 
-      {/* ================= 8. CASH-OUT BOTTOM SHEET MODAL ================= */}
+      {/* ================= 8. LISTING MANAGEMENT BOTTOM SHEET MODAL ================= */}
+      <Modal
+        visible={manageItem !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setManageItem(null)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setManageItem(null)} />
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 },
+            ]}>
+            <View style={styles.modalDragNotch} />
+
+            {manageItem && (
+              <View>
+                {/* Modal Header */}
+                <View style={styles.manageHeaderRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.manageModalTitle, { color: theme.text }]} numberOfLines={1}>
+                      Manage Listing
+                    </Text>
+                    <Text style={[styles.manageModalSub, { color: theme.textSecondary }]} numberOfLines={1}>
+                      {manageItem.title}
+                    </Text>
+                  </View>
+                  <Pressable onPress={() => setManageItem(null)} style={styles.modalCloseBtn}>
+                    <Ionicons name="close" size={22} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+
+                {/* Manage Options List */}
+                <View style={styles.manageOptionsList}>
+                  {/* Option 1: Urgent Badge Toggle */}
+                  <Pressable
+                    accessibilityRole="button"
+                    style={[
+                      styles.manageOptionCard,
+                      {
+                        backgroundColor: manageItem.isUrgent ? '#FEF2F2' : theme.surfaceSubtle,
+                        borderColor: manageItem.isUrgent ? '#DC2626' : theme.border,
+                      },
+                    ]}
+                    onPress={() => handleToggleUrgent(manageItem)}>
+                    <View
+                      style={[
+                        styles.manageOptionIconCircle,
+                        { backgroundColor: manageItem.isUrgent ? '#DC2626' : theme.surface },
+                      ]}>
+                      <Ionicons
+                        name="flash"
+                        size={18}
+                        color={manageItem.isUrgent ? '#FFFFFF' : theme.textSecondary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.manageOptionTitle,
+                          { color: manageItem.isUrgent ? '#DC2626' : theme.text },
+                        ]}>
+                        {manageItem.isUrgent ? 'Urgent Selling Enabled' : 'Mark as Urgent Selling'}
+                      </Text>
+                      <Text style={[styles.manageOptionDesc, { color: theme.textSecondary }]}>
+                        {manageItem.isUrgent
+                          ? 'Item is prominently badged for fast campus sale.'
+                          : 'Highlight item in red across marketplace for quick buyer response.'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={!!manageItem.isUrgent}
+                      onValueChange={() => handleToggleUrgent(manageItem)}
+                      trackColor={{ false: theme.border, true: '#DC2626' }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </Pressable>
+
+                  {/* Option 2: Reserve / Unreserve */}
+                  <Pressable
+                    accessibilityRole="button"
+                    style={[
+                      styles.manageOptionCard,
+                      {
+                        backgroundColor: theme.surfaceSubtle,
+                        borderColor: theme.border,
+                      },
+                    ]}
+                    onPress={() => handleToggleReserved(manageItem)}>
+                    <View style={[styles.manageOptionIconCircle, { backgroundColor: theme.surface }]}>
+                      <Ionicons
+                        name={
+                          manageItem.isReserved || manageItem.status === 'reserved'
+                            ? 'lock-open-outline'
+                            : 'lock-closed-outline'
+                        }
+                        size={18}
+                        color={theme.primary}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.manageOptionTitle, { color: theme.text }]}>
+                        {manageItem.isReserved || manageItem.status === 'reserved'
+                          ? 'Unreserve Listing'
+                          : 'Hold as Reserved'}
+                      </Text>
+                      <Text style={[styles.manageOptionDesc, { color: theme.textSecondary }]}>
+                        {manageItem.isReserved || manageItem.status === 'reserved'
+                          ? 'Re-open this item for active inquiries and trade proposals.'
+                          : 'Show a Reserved badge while coordinating safe campus meetup.'}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+                  </Pressable>
+
+                  {/* Option 3: Mark as Sold */}
+                  <Pressable
+                    accessibilityRole="button"
+                    style={[
+                      styles.manageOptionCard,
+                      { backgroundColor: theme.badgeGreenBg, borderColor: theme.primaryLight },
+                    ]}
+                    onPress={() => handleMarkSold(manageItem)}>
+                    <View style={[styles.manageOptionIconCircle, { backgroundColor: theme.primary }]}>
+                      <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.manageOptionTitle, { color: theme.primaryDark }]}>
+                        Mark as Sold
+                      </Text>
+                      <Text style={[styles.manageOptionDesc, { color: theme.primaryDark }]}>
+                        Complete trade and move this listing to your Sold record.
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.primary} />
+                  </Pressable>
+
+                  {/* Option 4: Delete Listing */}
+                  <Pressable
+                    accessibilityRole="button"
+                    style={[
+                      styles.manageOptionCard,
+                      { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                    ]}
+                    onPress={() => handleDeleteConfirm(manageItem)}>
+                    <View style={[styles.manageOptionIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                      <Ionicons name="trash-outline" size={18} color={theme.error} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.manageOptionTitle, { color: theme.error }]}>
+                        Remove Listing
+                      </Text>
+                      <Text style={[styles.manageOptionDesc, { color: theme.textSecondary }]}>
+                        Permanently delete this item from the student marketplace.
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={theme.error} />
+                  </Pressable>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 9. CASH-OUT BOTTOM SHEET MODAL ================= */}
       <Modal
         visible={isCashOutModalVisible}
         transparent
@@ -1028,14 +1457,14 @@ export default function ProfileScreen() {
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={handleCloseCashOutModal} />
 
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 24 }]}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalDragNotch} />
 
             {cashOutSuccess ? (
               /* Success Receipt View */
               <View style={styles.cashOutSuccessContainer}>
                 <View style={[styles.successShieldCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                  <Ionicons name="checkmark-circle" size={48} color={theme.primary} />
+                  <Ionicons name="checkmark-circle" size={44} color={theme.primary} />
                 </View>
                 <Text style={[styles.successMainTitle, { color: theme.text }]}>
                   Disbursement Complete!
@@ -1054,7 +1483,7 @@ export default function ProfileScreen() {
                   ]}>
                   <View style={styles.receiptRow}>
                     <Text style={[styles.receiptLabel, { color: theme.textSecondary }]}>
-                      Reference Code:
+                      Reference:
                     </Text>
                     <Text style={[styles.receiptValue, { color: theme.text }]}>
                       {cashOutSuccess.referenceCode}
@@ -1111,7 +1540,7 @@ export default function ProfileScreen() {
                   </Text>
                 </View>
 
-                {/* Step 1: Select Channel (Clean Slate Invariant: starts null) */}
+                {/* Step 1: Select Channel */}
                 <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
                   Select E-Wallet Channel *
                 </Text>
@@ -1129,11 +1558,13 @@ export default function ProfileScreen() {
                       },
                     ]}
                     onPress={() => setCashOutChannel('gcash')}>
-                    <Ionicons
-                      name="wallet-outline"
-                      size={20}
-                      color={cashOutChannel === 'gcash' ? theme.primary : theme.textSecondary}
-                    />
+                    <View style={styles.channelLogoBoxGcash}>
+                      <Image
+                        source={GCASH_LOGO}
+                        style={styles.channelLogoImgGcash}
+                        contentFit="contain"
+                      />
+                    </View>
                     <Text
                       style={[
                         styles.channelName,
@@ -1145,7 +1576,7 @@ export default function ProfileScreen() {
                       GCash
                     </Text>
                     {cashOutChannel === 'gcash' && (
-                      <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
+                      <Ionicons name="checkmark-circle" size={15} color={theme.primary} />
                     )}
                   </Pressable>
 
@@ -1162,11 +1593,13 @@ export default function ProfileScreen() {
                       },
                     ]}
                     onPress={() => setCashOutChannel('maya')}>
-                    <Ionicons
-                      name="card-outline"
-                      size={20}
-                      color={cashOutChannel === 'maya' ? theme.primary : theme.textSecondary}
-                    />
+                    <View style={styles.channelLogoBoxMaya}>
+                      <Image
+                        source={MAYA_LOGO}
+                        style={styles.channelLogoImgMaya}
+                        contentFit="contain"
+                      />
+                    </View>
                     <Text
                       style={[
                         styles.channelName,
@@ -1178,7 +1611,7 @@ export default function ProfileScreen() {
                       Maya
                     </Text>
                     {cashOutChannel === 'maya' && (
-                      <Ionicons name="checkmark-circle" size={16} color={theme.primary} />
+                      <Ionicons name="checkmark-circle" size={15} color={theme.primary} />
                     )}
                   </Pressable>
                 </View>
@@ -1202,9 +1635,9 @@ export default function ProfileScreen() {
                     onChangeText={setCashOutAccount}
                   />
                   <Pressable
-                    onPress={() => setCashOutAccount('0917 824 5519')}
+                    onPress={() => setCashOutAccount(defaultPayoutNumber)}
                     style={styles.quickFillBtn}>
-                    <Text style={[styles.quickFillText, { color: theme.primary }]}>Registered</Text>
+                    <Text style={[styles.quickFillText, { color: theme.primary }]}>Default</Text>
                   </Pressable>
                 </View>
 
@@ -1259,9 +1692,9 @@ export default function ProfileScreen() {
 
                 {/* Fee Notice */}
                 <View style={styles.feeNoticeRow}>
-                  <Ionicons name="checkmark-done" size={14} color={theme.primary} />
+                  <Ionicons name="checkmark-done" size={13} color={theme.primary} />
                   <Text style={[styles.feeNoticeText, { color: theme.primaryDark }]}>
-                    ₱0.00 Student Transfer Fee • Instant disbursement
+                    ₱0.00 Transfer Fee • Instant disbursement
                   </Text>
                 </View>
 
@@ -1293,7 +1726,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ================= 9. ESCROW LEDGER MODAL SHEET ================= */}
+      {/* ================= 10. ESCROW LEDGER MODAL SHEET ================= */}
       <Modal
         visible={isLedgerModalVisible}
         transparent
@@ -1311,9 +1744,9 @@ export default function ProfileScreen() {
 
             <View style={styles.modalHeaderRow}>
               <View>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Escrow & Payout Ledger</Text>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Escrow Ledger</Text>
                 <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
-                  Record of escrow locks, completed releases, and disbursements
+                  Locks, releases, and disbursements record
                 </Text>
               </View>
               <Pressable onPress={() => setIsLedgerModalVisible(false)} style={styles.modalCloseBtn}>
@@ -1353,7 +1786,7 @@ export default function ProfileScreen() {
                             ? 'lock-closed'
                             : 'checkmark-circle'
                         }
-                        size={17}
+                        size={16}
                         color={
                           isCashOut ? theme.error : isPending ? theme.gold : theme.primary
                         }
@@ -1406,7 +1839,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ================= 10. ESCROW EXPLAINER MODAL ================= */}
+      {/* ================= 11. ESCROW EXPLAINER MODAL ================= */}
       <Modal
         visible={isEscrowGuideVisible}
         transparent
@@ -1416,21 +1849,20 @@ export default function ProfileScreen() {
           <Pressable style={styles.modalBackdrop} onPress={() => setIsEscrowGuideVisible(false)} />
           <View style={[styles.dialogBox, { backgroundColor: theme.surface, borderColor: theme.border }]}>
             <View style={[styles.dialogIconBox, { backgroundColor: theme.badgeGreenBg }]}>
-              <Ionicons name="shield-checkmark" size={32} color={theme.primary} />
+              <Ionicons name="shield-checkmark" size={30} color={theme.primary} />
             </View>
             <Text style={[styles.dialogTitle, { color: theme.text }]}>
-              CampusGreen Escrow Protection
+              Escrow Protection
             </Text>
             <Text style={[styles.dialogBody, { color: theme.textSecondary }]}>
               1. <Text style={{ fontWeight: '700', color: theme.text }}>Lock in Escrow:</Text> When a
-              buyer pays digitally via GCash or Maya, payment is locked safely in platform escrow.
+              buyer pays digitally via GCash or Maya, payment is safely held in platform escrow.
               {'\n\n'}
               2. <Text style={{ fontWeight: '700', color: theme.text }}>Safe Meetup Inspection:</Text>{' '}
-              Buyer and seller meet at the designated on-campus safe meetup spot (library, guard post).
-              Buyer inspects the textbook, scrubs, or gadget.
+              Buyer and seller meet at the designated campus meetup spot. Buyer inspects the textbook, scrubs, or gadget.
               {'\n\n'}
               3. <Text style={{ fontWeight: '700', color: theme.text }}>Instant Release:</Text> Once
-              handed over, buyer taps confirm, or the 72-hour auto-completion window finishes without dispute.
+              handed over, buyer taps confirm, or the 72-hour inspection window finishes.
               Funds immediately become Available for Cash-Out to GCash/Maya with ₱0 fees.
             </Text>
             <Pressable
@@ -1442,7 +1874,7 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ================= 11. EDIT MEETUP SPOT MODAL ================= */}
+      {/* ================= 12. EDIT MEETUP SPOT MODAL ================= */}
       <Modal
         visible={isEditSpotModalVisible}
         transparent
@@ -1450,9 +1882,9 @@ export default function ProfileScreen() {
         onRequestClose={() => setIsEditSpotModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={() => setIsEditSpotModalVisible(false)} />
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 24 }]}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
             <View style={styles.modalDragNotch} />
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Update Preferred Meetup Spot</Text>
+            <Text style={[styles.modalTitle, { color: theme.text }]}>Preferred Meetup Spot</Text>
             <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
               Designate a safe campus zone for physical item handovers
             </Text>
@@ -1496,6 +1928,645 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ================= 13. PAYMENT & PAYOUT DETAILS MODAL ================= */}
+      <Modal
+        visible={isPaymentDetailsModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPaymentDetailsModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsPaymentDetailsModalVisible(false)} />
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.modalDragNotch} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Payout E-Wallet Details</Text>
+                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+                  Default disbursement account for cleared escrow funds
+                </Text>
+              </View>
+              <Pressable onPress={() => setIsPaymentDetailsModalVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Channel Selection */}
+            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.four }]}>
+              Default Payout Channel *
+            </Text>
+            <View style={styles.channelRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Select GCash as default payout channel"
+                style={[
+                  styles.channelCard,
+                  {
+                    backgroundColor:
+                      tempPayoutChannel === 'gcash' ? theme.primaryLight : theme.surface,
+                    borderColor: tempPayoutChannel === 'gcash' ? theme.primary : theme.border,
+                  },
+                ]}
+                onPress={() => setTempPayoutChannel('gcash')}>
+                <View style={styles.channelLogoBoxGcash}>
+                  <Image
+                    source={GCASH_LOGO}
+                    style={styles.channelLogoImgGcash}
+                    contentFit="contain"
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.channelName,
+                    {
+                      color: tempPayoutChannel === 'gcash' ? theme.primary : theme.text,
+                      fontWeight: tempPayoutChannel === 'gcash' ? '700' : '600',
+                    },
+                  ]}>
+                  GCash
+                </Text>
+                {tempPayoutChannel === 'gcash' && (
+                  <Ionicons name="checkmark-circle" size={15} color={theme.primary} />
+                )}
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Select Maya as default payout channel"
+                style={[
+                  styles.channelCard,
+                  {
+                    backgroundColor:
+                      tempPayoutChannel === 'maya' ? theme.primaryLight : theme.surface,
+                    borderColor: tempPayoutChannel === 'maya' ? theme.primary : theme.border,
+                  },
+                ]}
+                onPress={() => setTempPayoutChannel('maya')}>
+                <View style={styles.channelLogoBoxMaya}>
+                  <Image
+                    source={MAYA_LOGO}
+                    style={styles.channelLogoImgMaya}
+                    contentFit="contain"
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.channelName,
+                    {
+                      color: tempPayoutChannel === 'maya' ? theme.primary : theme.text,
+                      fontWeight: tempPayoutChannel === 'maya' ? '700' : '600',
+                    },
+                  ]}>
+                  Maya
+                </Text>
+                {tempPayoutChannel === 'maya' && (
+                  <Ionicons name="checkmark-circle" size={15} color={theme.primary} />
+                )}
+              </Pressable>
+            </View>
+
+            {/* Mobile number */}
+            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
+              Registered E-Wallet Mobile Number *
+            </Text>
+            <View
+              style={[
+                styles.modalInputContainer,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}>
+              <Text style={[styles.countryCode, { color: theme.textMuted }]}>+63</Text>
+              <TextInput
+                style={[styles.modalTextInput, { color: theme.text }]}
+                placeholder="917 824 5519"
+                placeholderTextColor={theme.textMuted}
+                keyboardType="phone-pad"
+                value={tempPayoutNumber}
+                onChangeText={setTempPayoutNumber}
+              />
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save payout details"
+              style={[styles.modalPrimaryActionBtn, { backgroundColor: theme.primary, marginTop: Spacing.four }]}
+              onPress={handleSavePaymentDetails}>
+              <Text style={styles.modalPrimaryActionText}>Save Payout Details</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 14. CHANGE PASSWORD MODAL ================= */}
+      <Modal
+        visible={isChangePasswordModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsChangePasswordModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsChangePasswordModalVisible(false)} />
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.modalDragNotch} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Change Password</Text>
+                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+                  Keep your student institutional account safe
+                </Text>
+              </View>
+              <Pressable onPress={() => setIsChangePasswordModalVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Current Password */}
+            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.four }]}>
+              Current Password *
+            </Text>
+            <View
+              style={[
+                styles.modalInputContainer,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}>
+              <TextInput
+                style={[styles.modalTextInput, { color: theme.text }]}
+                placeholder="Enter current password"
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry={!showPassword}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+              />
+              <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
+                <Ionicons
+                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                  size={18}
+                  color={theme.textMuted}
+                />
+              </Pressable>
+            </View>
+
+            {/* New Password */}
+            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
+              New Password (minimum 6 characters) *
+            </Text>
+            <View
+              style={[
+                styles.modalInputContainer,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}>
+              <TextInput
+                style={[styles.modalTextInput, { color: theme.text }]}
+                placeholder="Enter new password"
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry={!showPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+              />
+            </View>
+
+            {/* Confirm Password */}
+            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
+              Confirm New Password *
+            </Text>
+            <View
+              style={[
+                styles.modalInputContainer,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}>
+              <TextInput
+                style={[styles.modalTextInput, { color: theme.text }]}
+                placeholder="Re-type new password"
+                placeholderTextColor={theme.textMuted}
+                secureTextEntry={!showPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Update password"
+              style={[styles.modalPrimaryActionBtn, { backgroundColor: theme.primary, marginTop: Spacing.four }]}
+              onPress={handleChangePassword}>
+              <Text style={styles.modalPrimaryActionText}>Update Password</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 15. APP APPEARANCE MODAL ================= */}
+      <Modal
+        visible={isAppearanceModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsAppearanceModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={() => setIsAppearanceModalVisible(false)} />
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
+            <View style={styles.modalDragNotch} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>App Appearance</Text>
+                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+                  Choose how CampusGreen looks on this device
+                </Text>
+              </View>
+              <Pressable onPress={() => setIsAppearanceModalVisible(false)} style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Appearance Options List */}
+            <View style={{ gap: Spacing.two, marginTop: Spacing.four }}>
+              {[
+                {
+                  id: 'system' as const,
+                  title: 'System Default',
+                  desc: 'Automatically matches your device display settings',
+                  icon: 'phone-portrait-outline' as const,
+                },
+                {
+                  id: 'light' as const,
+                  title: 'Light Theme',
+                  desc: 'Classic ivory background with forest academic green',
+                  icon: 'sunny-outline' as const,
+                },
+                {
+                  id: 'dark' as const,
+                  title: 'Dark Theme',
+                  desc: 'Soft dark charcoal tones for low-light campus reading',
+                  icon: 'moon-outline' as const,
+                },
+              ].map((opt) => {
+                const isSelected = themeMode === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${opt.title} option`}
+                    style={[
+                      styles.appearanceOptionCard,
+                      {
+                        backgroundColor: isSelected ? theme.primaryLight : theme.surfaceSubtle,
+                        borderColor: isSelected ? theme.primary : theme.border,
+                      },
+                    ]}
+                    onPress={() => {
+                      setThemeMode(opt.id);
+                      setActionFeedback(`App appearance set to ${opt.title}`);
+                      setTimeout(() => setActionFeedback(null), 3000);
+                      setIsAppearanceModalVisible(false);
+                    }}>
+                    <View
+                      style={[
+                        styles.accountRowIconCircle,
+                        {
+                          backgroundColor: isSelected ? theme.badgeGreenBg : theme.surface,
+                        },
+                      ]}>
+                      <Ionicons
+                        name={opt.icon}
+                        size={18}
+                        color={isSelected ? theme.primary : theme.text}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[
+                          styles.appearanceOptionTitle,
+                          {
+                            color: isSelected ? theme.primaryDark : theme.text,
+                            fontWeight: isSelected ? '700' : '600',
+                          },
+                        ]}>
+                        {opt.title}
+                      </Text>
+                      <Text style={[styles.appearanceOptionDesc, { color: theme.textSecondary }]}>
+                        {opt.desc}
+                      </Text>
+                    </View>
+                    <View
+                      style={[
+                        styles.radioIndicator,
+                        {
+                          borderColor: isSelected ? theme.primary : theme.border,
+                          backgroundColor: isSelected ? theme.primary : 'transparent',
+                        },
+                      ]}>
+                      {isSelected && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 16. EDIT STUDENT PROFILE DETAILS MODAL ================= */}
+      <Modal
+        visible={isEditProfileModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsEditProfileModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setIsEditProfileModalVisible(false)}
+          />
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 },
+            ]}>
+            <View style={styles.modalDragNotch} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Edit Profile</Text>
+                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+                  Update your campus identity & academic level
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setIsEditProfileModalVisible(false)}
+                style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            {/* Avatar Preview with Change Button */}
+            <View style={styles.editAvatarCenterRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change profile picture from editor"
+                style={styles.editAvatarPressable}
+                onPress={() => setIsPhotoPickerModalVisible(true)}>
+                <View
+                  style={[
+                    styles.editAvatarCircle,
+                    { backgroundColor: theme.primary, borderColor: theme.border },
+                  ]}>
+                  {tempAvatarUri ? (
+                    <Image
+                      source={{ uri: tempAvatarUri }}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <Text style={styles.editAvatarInitials}>
+                      {tempProfileName
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .substring(0, 2) || 'MS'}
+                    </Text>
+                  )}
+                  <View
+                    style={[
+                      styles.editAvatarCameraBadge,
+                      { backgroundColor: theme.primary, borderColor: theme.surface },
+                    ]}>
+                    <Ionicons name="camera" size={12} color="#FFFFFF" />
+                  </View>
+                </View>
+                <Text style={[styles.editAvatarHint, { color: theme.primary }]}>
+                  Change Photo
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Student Full Name Input */}
+            <Text style={[styles.modalInputLabel, { color: theme.text }]}>Student Name *</Text>
+            <View
+              style={[
+                styles.modalInputContainer,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}>
+              <TextInput
+                style={[styles.modalTextInput, { color: theme.text }]}
+                placeholder="Full Name (e.g. Maria Santos)"
+                placeholderTextColor={theme.textMuted}
+                autoCapitalize="words"
+                value={tempProfileName}
+                onChangeText={setTempProfileName}
+              />
+            </View>
+
+            {/* Degree / Program Input */}
+            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
+              Degree / Program
+            </Text>
+            <View
+              style={[
+                styles.modalInputContainer,
+                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+              ]}>
+              <TextInput
+                style={[styles.modalTextInput, { color: theme.text }]}
+                placeholder="e.g. BS Nursing"
+                placeholderTextColor={theme.textMuted}
+                autoCapitalize="words"
+                value={tempProfileDegree}
+                onChangeText={setTempProfileDegree}
+              />
+            </View>
+
+            {/* Year Level Chips */}
+            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
+              Year Level
+            </Text>
+            <View style={styles.yearLevelChipsRow}>
+              {YEAR_LEVEL_OPTIONS.map((year) => {
+                const isSelected = tempProfileYearLevel === year;
+                return (
+                  <Pressable
+                    key={year}
+                    accessibilityRole="button"
+                    accessibilityLabel={year}
+                    style={[
+                      styles.yearLevelChip,
+                      {
+                        backgroundColor: isSelected ? theme.primary : theme.surfaceSubtle,
+                        borderColor: isSelected ? theme.primary : theme.border,
+                      },
+                    ]}
+                    onPress={() => setTempProfileYearLevel(year)}>
+                    <Text
+                      style={[
+                        styles.yearLevelChipText,
+                        {
+                          color: isSelected ? '#FFFFFF' : theme.text,
+                          fontWeight: isSelected ? '700' : '500',
+                        },
+                      ]}>
+                      {year}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Save profile"
+              style={[
+                styles.modalPrimaryActionBtn,
+                { backgroundColor: theme.primary, marginTop: Spacing.four },
+              ]}
+              onPress={handleSaveProfile}>
+              <Text style={styles.modalPrimaryActionText}>Save Profile</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 17. PROFILE PHOTO PICKER MODAL ================= */}
+      <Modal
+        visible={isPhotoPickerModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setIsPhotoPickerModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={() => setIsPhotoPickerModalVisible(false)}
+          />
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 },
+            ]}>
+            <View style={styles.modalDragNotch} />
+            <View style={styles.modalHeaderRow}>
+              <View>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>Profile Picture</Text>
+                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
+                  Take a photo, pick from gallery, or select an avatar
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setIsPhotoPickerModalVisible(false)}
+                style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            <View style={{ gap: Spacing.two, marginTop: Spacing.three }}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Take a live photo"
+                style={({ pressed }) => [
+                  styles.photoOptionCard,
+                  {
+                    backgroundColor: pressed ? theme.surfaceSubtle : theme.surfaceSubtle,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={handleTakeAvatarPhoto}>
+                <View style={[styles.photoOptionIconCircle, { backgroundColor: theme.primaryLight }]}>
+                  <Ionicons name="camera-outline" size={20} color={theme.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.photoOptionTitle, { color: theme.text }]}>Take a Live Photo</Text>
+                  <Text style={[styles.photoOptionDesc, { color: theme.textSecondary }]}>
+                    Use your device camera for instant capture
+                  </Text>
+                </View>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Choose from gallery"
+                style={({ pressed }) => [
+                  styles.photoOptionCard,
+                  {
+                    backgroundColor: pressed ? theme.surfaceSubtle : theme.surfaceSubtle,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={handlePickAvatarFromLibrary}>
+                <View style={[styles.photoOptionIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
+                  <Ionicons name="images-outline" size={20} color={theme.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.photoOptionTitle, { color: theme.text }]}>Choose from Gallery</Text>
+                  <Text style={[styles.photoOptionDesc, { color: theme.textSecondary }]}>
+                    Select a photo from your device library
+                  </Text>
+                </View>
+              </Pressable>
+
+              {/* Campus Avatar Presets */}
+              <View style={styles.presetSection}>
+                <Text style={[styles.presetSectionLabel, { color: theme.textSecondary }]}>
+                  CAMPUS PRESET AVATARS
+                </Text>
+                <View style={styles.avatarPresetsRow}>
+                  {AVATAR_PRESETS.map((preset, index) => {
+                    const isSelected = (tempAvatarUri || profileAvatarUri) === preset.uri;
+                    return (
+                      <Pressable
+                        key={`preset-${index}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={preset.title}
+                        style={[
+                          styles.avatarPresetThumb,
+                          {
+                            borderColor: isSelected ? theme.primary : theme.border,
+                          },
+                        ]}
+                        onPress={() => handleSelectAvatarPreset(preset.uri)}>
+                        <Image
+                          source={{ uri: preset.uri }}
+                          style={StyleSheet.absoluteFill}
+                          contentFit="cover"
+                        />
+                        {isSelected && (
+                          <View
+                            style={[
+                              styles.presetSelectedBadge,
+                              { backgroundColor: theme.primary },
+                            ]}>
+                            <Ionicons name="checkmark" size={12} color="#FFFFFF" />
+                          </View>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Remove Current Photo (if set) */}
+              {(tempAvatarUri || profileAvatarUri) && (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove current photo"
+                  style={({ pressed }) => [
+                    styles.photoOptionCard,
+                    {
+                      backgroundColor: pressed ? theme.surfaceSubtle : theme.surfaceSubtle,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                  onPress={handleRemoveAvatarPhoto}>
+                  <View style={[styles.photoOptionIconCircle, { backgroundColor: '#FEE2E2' }]}>
+                    <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.photoOptionTitle, { color: '#DC2626' }]}>
+                      Remove Profile Photo
+                    </Text>
+                    <Text style={[styles.photoOptionDesc, { color: theme.textSecondary }]}>
+                      Revert back to student initials
+                    </Text>
+                  </View>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1509,30 +2580,134 @@ const styles = StyleSheet.create({
     gap: Spacing.three,
   },
 
-  /* Top Header Bar */
-  topHeaderBar: {
+  /* 1. Student Identity Header Card */
+  studentProfileCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  studentInfoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: Spacing.two,
+    gap: 12,
   },
-  largeTitle: {
-    fontSize: 28,
-    fontWeight: '800',
-    letterSpacing: -0.5,
+  avatarPressable: {
+    position: 'relative',
   },
-  subtitle: {
-    fontSize: 13,
-    marginTop: 2,
+  avatarCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
   },
-  settingsIconBtn: {
-    width: 40,
-    height: 40,
+  avatarPenBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 20,
+    height: 20,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  editProfilePenBtn: {
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  avatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  verifiedBadgeDot: {
+    position: 'absolute',
+    bottom: -1,
+    right: -1,
+    backgroundColor: '#1F5C3A',
+    width: 18,
+    height: 18,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  studentMeta: {
+    flex: 1,
+    gap: 1,
+  },
+  nameAndStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  studentName: {
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: -0.3,
+  },
+  verifiedTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: Radius.full,
+  },
+  verifiedTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  studentDegree: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  studentCampus: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+
+  /* Metrics Matrix (Clean 3-column grid) */
+  metricsMatrix: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  matrixItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  matrixVal: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  matrixLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  matrixDivider: {
+    width: 1,
+    height: 20,
+  },
+
+  /* Action Feedback Toast */
   feedbackBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1542,134 +2717,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   feedbackBannerText: {
-    fontSize: 13,
-    fontWeight: '600',
-    flex: 1,
-  },
-
-  /* 1. Student Identity Card */
-  identityCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.four,
-    gap: Spacing.three,
-  },
-  identityTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  avatarCircle: {
-    width: 62,
-    height: 62,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  avatarInitials: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  verifiedShieldBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    backgroundColor: '#1F5C3A',
-    width: 20,
-    height: 20,
-    borderRadius: Radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  identityDetails: {
-    flex: 1,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  studentName: {
-    fontSize: 18,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-  },
-  verifiedTag: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: Radius.full,
-  },
-  verifiedTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  degreeProgram: {
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  campusText: {
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 1,
-  },
-  reputationMetricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-  },
-  reputationMetricItem: {
-    alignItems: 'center',
     flex: 1,
   },
-  metricValRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  metricValText: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  metricLabelText: {
-    fontSize: 11,
-    fontWeight: '500',
-    marginTop: 2,
-  },
-  metricDivider: {
-    width: 1,
-    height: 24,
-  },
-  greenImpactStrip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingTop: 4,
-  },
-  greenImpactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  greenImpactLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
 
-  /* 2. Redesigned Escrow Wallet Card */
+  /* 2. Escrow Wallet Card */
   escrowWalletCard: {
-    borderRadius: Radius.xl,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     padding: Spacing.four,
     gap: Spacing.three,
@@ -1682,17 +2737,17 @@ const styles = StyleSheet.create({
   walletTitleGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   walletIconCircle: {
-    width: 38,
-    height: 38,
+    width: 34,
+    height: 34,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   walletTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
   },
   walletSubtitle: {
@@ -1701,48 +2756,45 @@ const styles = StyleSheet.create({
   escrowInfoBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     paddingHorizontal: 8,
     paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
   },
   escrowInfoBadgeText: {
     fontSize: 11,
     fontWeight: '600',
   },
-  mainBalanceSection: {
-    gap: 4,
-    marginTop: 2,
+  balanceSection: {
+    gap: 6,
   },
-  mainBalanceLabel: {
-    fontSize: 11,
+  balanceMainRow: {
+    gap: 2,
+  },
+  balanceSmallLabel: {
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  mainBalanceFigure: {
-    fontSize: 28,
+  balanceMainAmount: {
+    fontSize: 26,
     fontWeight: '800',
     letterSpacing: -0.5,
   },
   inEscrowPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: Radius.md,
     borderWidth: 1,
-    marginTop: 4,
   },
   inEscrowPillText: {
-    fontSize: 12,
+    fontSize: 11,
     flex: 1,
   },
-  walletActionDock: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 4,
-  },
   primaryCashOutBtn: {
-    flex: 1.2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1753,19 +2805,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
-  },
-  secondaryLedgerBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-  },
-  secondaryLedgerBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   walletFooterNotice: {
     flexDirection: 'row',
@@ -1779,11 +2818,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  /* 3. Marketplace Segment Tabs */
+  /* 3. Segmented Tabs */
   segmentedTabsContainer: {
     flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
+    gap: 6,
+    marginTop: 2,
   },
   segmentTab: {
     flex: 1,
@@ -1799,31 +2838,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
 
-  /* 4. Tab Content Block */
+  /* 4. Tab Content & Listings */
   tabContentBlock: {
     gap: Spacing.three,
   },
-  growthPromoCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    padding: Spacing.three,
-    gap: 4,
-  },
-  growthPromoHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  growthPromoTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  growthPromoBody: {
-    fontSize: 12,
-    lineHeight: 17,
-  },
-
-  /* Listing Card */
   listingCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
@@ -1835,8 +2853,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   listingThumb: {
-    width: 76,
-    height: 76,
+    width: 72,
+    height: 72,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -1888,7 +2906,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 18,
-    marginTop: 2,
+    marginTop: 1,
   },
   listingSubtext: {
     fontSize: 11,
@@ -1897,7 +2915,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: 3,
+    marginTop: 2,
   },
   statMiniItem: {
     flexDirection: 'row',
@@ -1907,39 +2925,51 @@ const styles = StyleSheet.create({
   statMiniText: {
     fontSize: 11,
   },
-  growthToolsDock: {
+
+  /* Ergonomic Action Dock (2 clean, thumb-friendly buttons) */
+  ergonomicActionDock: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
     borderTopWidth: 1,
     paddingTop: Spacing.two,
   },
-  growthToolBtn: {
+  bumpBtn: {
+    flex: 1.4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 5,
+  },
+  bumpBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  manageListingBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 7,
-    borderRadius: Radius.sm,
+    paddingVertical: 9,
+    borderRadius: Radius.md,
     borderWidth: 1,
-    gap: 3,
+    gap: 5,
   },
-  growthToolBtnText: {
-    fontSize: 11,
+  manageListingBtnText: {
+    fontSize: 12,
     fontWeight: '600',
   },
-  deleteListingBtn: {
-    padding: 7,
-    borderRadius: Radius.sm,
-  },
 
-  /* Empty state */
+  /* Empty State */
   emptyStateBox: {
     padding: Spacing.six,
     borderRadius: Radius.lg,
     borderWidth: 1,
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   emptyStateTitle: {
     fontSize: 15,
@@ -1962,7 +2992,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* Sold card */
+  /* Sold Item Card */
   soldItemCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
@@ -1973,11 +3003,12 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   soldItemThumb: {
-    width: 64,
-    height: 64,
+    width: 60,
+    height: 60,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   soldBadgeRow: {
     flexDirection: 'row',
@@ -2008,12 +3039,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
 
-  /* Purchase card */
+  /* Purchase Card */
   purchaseCard: {
     borderRadius: Radius.lg,
     borderWidth: 1,
     padding: Spacing.four,
-    gap: 8,
+    gap: 6,
   },
   purchaseHeader: {
     flexDirection: 'row',
@@ -2030,8 +3061,8 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   inEscrowTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: Radius.sm,
   },
   inEscrowTagText: {
@@ -2050,7 +3081,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: Radius.md,
     borderWidth: 1,
     marginTop: 2,
@@ -2064,13 +3095,13 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
 
-  /* 7. Grouped Account & Campus Safety Section */
+  /* 7. Grouped Account & Safety Section */
   accountSection: {
     gap: Spacing.two,
-    marginTop: Spacing.three,
+    marginTop: Spacing.two,
   },
   accountSectionHeading: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.2,
     marginLeft: 4,
@@ -2084,19 +3115,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.four,
-    paddingVertical: 13,
+    paddingVertical: 12,
     gap: 12,
   },
   accountRowIconCircle: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   accountRowContent: {
     flex: 1,
-    gap: 2,
+    gap: 1,
   },
   accountRowTitle: {
     fontSize: 13,
@@ -2107,7 +3138,7 @@ const styles = StyleSheet.create({
   },
   rowDivider: {
     height: 1,
-    marginLeft: 60,
+    marginLeft: 58,
   },
 
   /* Modals Common */
@@ -2122,11 +3153,11 @@ const styles = StyleSheet.create({
   modalSheet: {
     borderTopLeftRadius: Radius.xl,
     borderTopRightRadius: Radius.xl,
-    paddingHorizontal: Spacing.five,
+    paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
   },
   modalDragNotch: {
-    width: 38,
+    width: 36,
     height: 4,
     borderRadius: Radius.full,
     backgroundColor: '#CCCCCC',
@@ -2139,7 +3170,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
   },
   modalSub: {
@@ -2149,18 +3180,63 @@ const styles = StyleSheet.create({
   modalCloseBtn: {
     padding: 4,
   },
+
+  /* Manage Listing Modal Sheet */
+  manageHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.three,
+  },
+  manageModalTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  manageModalSub: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  manageOptionsList: {
+    gap: 8,
+  },
+  manageOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 10,
+  },
+  manageOptionIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manageOptionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  manageOptionDesc: {
+    fontSize: 11,
+    marginTop: 1,
+    lineHeight: 15,
+  },
+
+  /* Cash Out & Form Styles */
   modalBalancePill: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: Radius.md,
     borderWidth: 1,
-    marginTop: Spacing.three,
+    marginTop: Spacing.two,
   },
   modalBalanceLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
   },
   modalBalanceVal: {
@@ -2173,7 +3249,7 @@ const styles = StyleSheet.create({
   },
   channelRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginTop: 6,
   },
   channelCard: {
@@ -2181,10 +3257,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: Radius.md,
     borderWidth: 1.5,
-    gap: 8,
+    gap: 6,
   },
   channelName: {
     fontSize: 13,
@@ -2195,7 +3271,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: 12,
-    paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    paddingVertical: Platform.OS === 'ios' ? 9 : 5,
     marginTop: 6,
   },
   countryCode: {
@@ -2204,7 +3280,7 @@ const styles = StyleSheet.create({
     marginRight: 6,
   },
   currencyPrefix: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
     marginRight: 6,
   },
@@ -2214,7 +3290,7 @@ const styles = StyleSheet.create({
   },
   quickFillBtn: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 3,
   },
   quickFillText: {
     fontSize: 11,
@@ -2222,7 +3298,7 @@ const styles = StyleSheet.create({
   },
   presetChipsRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     marginTop: 8,
   },
   presetChip: {
@@ -2241,44 +3317,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: Spacing.three,
+    marginTop: Spacing.two,
   },
   feeNoticeText: {
     fontSize: 11,
     fontWeight: '600',
   },
   modalPrimaryActionBtn: {
-    paddingVertical: 13,
+    paddingVertical: 12,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalPrimaryActionText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
 
   /* Success View */
   cashOutSuccessContainer: {
     alignItems: 'center',
-    paddingVertical: Spacing.four,
-    gap: 8,
+    paddingVertical: Spacing.three,
+    gap: 6,
   },
   successShieldCircle: {
-    width: 70,
-    height: 70,
+    width: 64,
+    height: 64,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   successMainTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
   },
   successAmountText: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
   },
   successDescText: {
@@ -2291,7 +3367,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: Spacing.three,
     gap: 6,
-    marginVertical: Spacing.three,
+    marginVertical: Spacing.two,
   },
   receiptRow: {
     flexDirection: 'row',
@@ -2306,7 +3382,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* Ledger modal styles */
+  /* Ledger Modal */
   ledgerTxCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2351,35 +3427,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: Spacing.five,
+    padding: Spacing.four,
   },
   dialogBox: {
     width: '100%',
     borderRadius: Radius.xl,
     borderWidth: 1,
-    padding: Spacing.five,
+    padding: Spacing.four,
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
   },
   dialogIconBox: {
-    width: 56,
-    height: 56,
+    width: 52,
+    height: 52,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
   dialogTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '800',
     textAlign: 'center',
   },
   dialogBody: {
     fontSize: 12,
-    lineHeight: 18,
+    lineHeight: 17,
   },
   dialogBtn: {
     width: '100%',
-    paddingVertical: 12,
+    paddingVertical: 11,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -2396,16 +3472,209 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginTop: Spacing.three,
+    marginTop: Spacing.two,
   },
   quickSpotChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: Radius.full,
     borderWidth: 1,
   },
   quickSpotChipText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+
+  /* App Appearance Option Card */
+  appearanceOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.three,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    gap: Spacing.three,
+  },
+  appearanceOptionTitle: {
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  appearanceOptionDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  radioIndicator: {
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  /* E-Wallet Channel Logos */
+  rowGcashLogo: {
+    width: 20,
+    height: 18,
+  },
+  rowMayaLogo: {
+    width: 22,
+    height: 11,
+  },
+  rowChannelBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeGcashLogo: {
+    width: 24,
+    height: 11,
+  },
+  badgeMayaLogo: {
+    width: 26,
+    height: 9,
+  },
+  channelLogoBoxGcash: {
+    width: 26,
+    height: 22,
+    borderRadius: Radius.sm,
+    backgroundColor: '#EFF6FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  channelLogoImgGcash: {
+    width: 18,
+    height: 16,
+  },
+  channelLogoBoxMaya: {
+    width: 28,
+    height: 22,
+    borderRadius: Radius.sm,
+    backgroundColor: '#0A1810',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 2,
+  },
+  channelLogoImgMaya: {
+    width: 22,
+    height: 10,
+  },
+
+  /* Profile Photo Picker & Profile Editing Sheet Styles */
+  photoOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  photoOptionIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoOptionTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: -0.2,
+  },
+  photoOptionDesc: {
+    fontSize: 12,
+    fontWeight: '400',
+    marginTop: 1,
+  },
+  presetSection: {
+    marginTop: 6,
+    gap: 8,
+  },
+  presetSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  avatarPresetsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  avatarPresetThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: Radius.full,
+    overflow: 'hidden',
+    borderWidth: 2,
+    position: 'relative',
+  },
+  presetSelectedBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 18,
+    height: 18,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+  editAvatarCenterRow: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: 12,
+  },
+  editAvatarPressable: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  editAvatarCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+    borderWidth: 2,
+  },
+  editAvatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '800',
+  },
+  editAvatarCameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+  },
+  editAvatarHint: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  yearLevelChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 4,
+  },
+  yearLevelChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+  },
+  yearLevelChipText: {
+    fontSize: 12,
   },
 });
