@@ -23,6 +23,7 @@ import { MOCK_ITEMS } from '@/data/mock-items';
 import { ItemPhoto } from '@/types/item';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const HERO_HEIGHT = Math.round(Math.min(SCREEN_WIDTH * 1.05, 420));
 
 export default function ItemDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -85,7 +86,14 @@ export default function ItemDetailScreen() {
           { paddingBottom: insets.bottom + 84 },
         ]}>
         {/* Swipeable Multi-Photo Hero Carousel */}
-        <View style={styles.carouselWrapper}>
+        <View
+          style={[
+            styles.carouselWrapper,
+            {
+              backgroundColor: '#FFFFFF',
+              borderBottomColor: theme.borderSubtle,
+            },
+          ]}>
           <FlatList
             ref={carouselRef}
             data={photos}
@@ -100,16 +108,26 @@ export default function ItemDetailScreen() {
                   styles.heroSlide,
                   {
                     width: SCREEN_WIDTH,
-                    backgroundColor: theme.surfaceSubtle,
+                    height: HERO_HEIGHT,
+                    backgroundColor: '#FFFFFF',
                   },
                 ]}>
                 {photo.uri ? (
-                  <Image
-                    source={{ uri: photo.uri }}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                    transition={200}
-                  />
+                  <View
+                    style={[
+                      styles.heroImageFrame,
+                      {
+                        paddingTop: insets.top + 48,
+                        paddingBottom: 46,
+                      },
+                    ]}>
+                    <Image
+                      source={{ uri: photo.uri }}
+                      style={styles.heroImage}
+                      contentFit="contain"
+                      transition={200}
+                    />
+                  </View>
                 ) : (
                   /* Background Concentric Vector Circles */
                   <View style={styles.concentricOuter}>
@@ -648,14 +666,26 @@ const styles = StyleSheet.create({
   },
   carouselWrapper: {
     position: 'relative',
-    height: 275,
+    height: HERO_HEIGHT,
+    borderBottomWidth: 1,
   },
   heroSlide: {
-    height: 275,
+    height: HERO_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
     overflow: 'hidden',
+  },
+  heroImageFrame: {
+    width: '100%',
+    height: '100%',
+    paddingHorizontal: Spacing.four,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
   },
   concentricOuter: {
     width: 150,

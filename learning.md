@@ -360,3 +360,33 @@ This document captures project-specific design standards, user preferences, and 
     - **Profile Defaults**: Default active listings, degree programs (`BS Tourism Management`), and preferred exchange locations align with the student persona.
 - **Consistent Thumbnail Rendering Across Tabs**:
   - Item images must be rendered in the **Basket** (`src/app/(tabs)/basket.tsx`), **Chat Inbox** (`src/app/(tabs)/chat.tsx`), **Active Profile Listings** (`src/app/(tabs)/profile.tsx`), and **Marketplace Grid** (`src/components/marketplace/item-card.tsx`) using `ExpoImage` (`contentFit="cover"`).
+
+### 21. Product Info Detail Screen: Hero Image Viewport & White-Space Framing
+- **Expansive Hero Viewport Height**:
+  - Never constrain the primary item photo to a short ~250–275px banner. Short banners restrict visual inspection of book condition, uniform stitching, or gadget ports.
+  - Set the hero container height dynamically: `const HERO_HEIGHT = Math.round(Math.min(SCREEN_WIDTH * 1.05, 420));` (~390–420px on standard mobile screens). This provides ~50% more visual space while keeping essential listing details (title, pricing, badges) visible in the first fold.
+- **Studio White Space & Zero-Cropping Invariant (`contentFit="contain"`)**:
+  - Student item uploads come in arbitrary aspect ratios: tall portraits (3:4 or 9:16 for uniforms and lab coats), wide landscape shots (16:9 for electronics and drawing boards), and squares.
+  - Avoid `contentFit="cover"` on the main product hero view because it aggressively crops the top, bottom, or sides of student items.
+  - Use `contentFit="contain"` positioned against a pure white studio backdrop (`backgroundColor: '#FFFFFF'`) with a subtle bottom divider (`theme.borderSubtle`). This creates a clean e-commerce studio showcase where any photo shape is fully visible with balanced white margins.
+- **Safe-Zone Inset Framing for Floating Controls**:
+  - The hero viewport features floating controls: top navigation buttons (`chevron-back`, `share-outline`), top urgent badge, bottom pagination dots, photo angle tag, and floating price deal badge.
+  - To prevent floating badges and buttons from occluding the product, wrap the hero `<Image />` in an inner frame (`heroImageFrame`) with safe-zone inset padding (`paddingTop: insets.top + 48`, `paddingBottom: 46`, `paddingHorizontal: Spacing.four`). The photo centers naturally in the white canvas, entirely free from overlap.
+
+### 22. Multi-Step Form Keyboard Avoidance & Input Auto-Scroll Ergonomics (Sell Modal)
+- **Dynamic `onLayout` Position Tracking Over Hardcoded Offsets**:
+  - Never use arbitrary hardcoded Y offsets (e.g. `180px`) for inputs preceded by dynamic-height sections (e.g., photo pickers, hero cards, or accordion blocks). When a photo picker renders presets or thumbnails, the input's actual Y position shifts to ~440px–500px, causing hardcoded small scrolls to land short and leave the input hidden beneath the keyboard.
+  - Attach `onLayout={(e) => { fieldPositions.current[key] = e.nativeEvent.layout.y; }}` to each field's wrapper `<View>`.
+  - In `scrollToKey(key)`, calculate `targetY = Math.max(0, y - 16)` and execute a two-phase scroll: an immediate `scrollTo` followed by a staggered timeout (90ms on iOS / 160ms on Android) so the field locks cleanly into place at the top of the visible screen once the keyboard animation finishes.
+- **Dynamic Keyboard Inset Clearance on ScrollView**:
+  - A `ScrollView` cannot scroll past its content height. If the keyboard opens, inputs near the bottom cannot be scrolled into view without extra scrollable space.
+  - Listen to `Keyboard.addListener` (`keyboardWillShow`/`keyboardDidShow` and `keyboardWillHide`/`keyboardDidHide`) and dynamically expand `paddingBottom` by `+ 360` when `isKeyboardVisible` is true. This ensures the scroll container has ample physical clearance to scroll any field—even the lowest multiline Description field—completely clear of the keyboard and dock.
+- **Card Selection Auto-Reveal**:
+  - When a user taps a selection card that conditionally reveals inputs (e.g. tapping "Sell for Cash (₱)" reveals the Price box, or tapping "The Swap Zone (Barter)" reveals the Swap Wishlist), automatically trigger `scrollToKey('price', 440)` so the student immediately sees the new input without having to manually scroll.
+- **Fluid Keyboard Dismissal**:
+  - Always set `keyboardDismissMode="on-drag"` on form `ScrollView`s so swiping down dismisses the keyboard naturally.
+  - On single-line inputs (Title, Price, Swap Wishlist, Custom Meetup Spot, Academic Program), attach `returnKeyType="done"` and `onSubmitEditing={Keyboard.dismiss}`.
+- **React 19 / React Native 0.88 Ref Typing**:
+  - Do NOT type `useRef<ScrollView>(null)`. In React 19, `ScrollView` is typed as a component function with context properties, causing TS2339 / TS2322 errors on `.scrollTo()`. Always use `useRef<React.ElementRef<typeof ScrollView>>(null)`.
+
+

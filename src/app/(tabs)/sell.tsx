@@ -1,7 +1,8 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -69,6 +70,37 @@ export default function SellScreen() {
   const insets = useSafeAreaInsets();
   const { addItem } = useItems();
   const itemCounterRef = useRef(0);
+  const scrollViewRef = useRef<React.ElementRef<typeof ScrollView>>(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => setIsKeyboardVisible(true)
+    );
+    const hideSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => setIsKeyboardVisible(false)
+    );
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const fieldPositions = useRef<{ [key: string]: number }>({});
+
+  const scrollToKey = (key: string, fallbackY = 0) => {
+    const y = fieldPositions.current[key] ?? fallbackY;
+    const targetY = Math.max(0, y - 16);
+    scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+    setTimeout(() => {
+      scrollViewRef.current?.scrollTo({
+        y: targetY,
+        animated: true,
+      });
+    }, Platform.OS === 'ios' ? 90 : 160);
+  };
 
   // Active Step State
   const [currentStep, setCurrentStep] = useState<Step>(1);
@@ -150,16 +182,30 @@ export default function SellScreen() {
   };
 
   const handleNext = () => {
+    Keyboard.dismiss();
     if (currentStep === 1) {
-      if (validateStep1()) setCurrentStep(2);
+      if (validateStep1()) {
+        setCurrentStep(2);
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      }
     } else if (currentStep === 2) {
-      if (validateStep2()) setCurrentStep(3);
+      if (validateStep2()) {
+        setCurrentStep(3);
+        scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+      }
     }
   };
 
   const handleBack = () => {
-    if (currentStep === 2) setCurrentStep(1);
-    if (currentStep === 3) setCurrentStep(2);
+    Keyboard.dismiss();
+    if (currentStep === 2) {
+      setCurrentStep(1);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }
+    if (currentStep === 3) {
+      setCurrentStep(2);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }
   };
 
   const handlePublish = async () => {
@@ -250,13 +296,15 @@ export default function SellScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
         <ScrollView
+          ref={scrollViewRef}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           contentContainerStyle={[
             styles.scrollContent,
             {
               paddingTop: insets.top + Spacing.two,
-              paddingBottom: insets.bottom + 90,
+              paddingBottom: insets.bottom + 90 + (isKeyboardVisible ? 360 : 0),
             },
           ]}>
           {/* Header & Progressive Stepper */}
@@ -385,7 +433,11 @@ export default function SellScreen() {
               />
 
               {/* Title */}
-              <View style={styles.cardSection}>
+              <View
+                style={styles.cardSection}
+                onLayout={(e) => {
+                  fieldPositions.current['title'] = e.nativeEvent.layout.y;
+                }}>
                 <View style={styles.labelRow}>
                   <Text style={[styles.fieldLabel, { color: theme.text }]}>Item Title *</Text>
                   <Text style={[styles.charCount, { color: theme.textMuted }]}>{title.length}/80</Text>
@@ -404,6 +456,9 @@ export default function SellScreen() {
                   value={title}
                   onChangeText={setTitle}
                   maxLength={80}
+                  onFocus={() => scrollToKey('title', 440)}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
                 />
               </View>
 
@@ -528,7 +583,10 @@ export default function SellScreen() {
                         borderColor: tradeType === 'buy' ? theme.primary : theme.border,
                       },
                     ]}
-                    onPress={() => setTradeType('buy')}>
+                    onPress={() => {
+                      setTradeType('buy');
+                      setTimeout(() => scrollToKey('price', 440), 60);
+                    }}>
                     <View style={[styles.dealIconBox, { backgroundColor: theme.badgeGreenBg }]}>
                       <Ionicons name="cash-outline" size={24} color={theme.primary} />
                     </View>
@@ -558,7 +616,10 @@ export default function SellScreen() {
                         borderColor: tradeType === 'swap' ? theme.blue : theme.border,
                       },
                     ]}
-                    onPress={() => setTradeType('swap')}>
+                    onPress={() => {
+                      setTradeType('swap');
+                      setTimeout(() => scrollToKey('swap', 440), 60);
+                    }}>
                     <View style={[styles.dealIconBox, { backgroundColor: theme.blueBg }]}>
                       <Ionicons name="swap-horizontal-outline" size={24} color={theme.blue} />
                     </View>
@@ -611,7 +672,11 @@ export default function SellScreen() {
 
               {/* Dynamic Price Input if 'buy' */}
               {tradeType === 'buy' && (
-                <View style={styles.cardSection}>
+                <View
+                  style={styles.cardSection}
+                  onLayout={(e) => {
+                    fieldPositions.current['price'] = e.nativeEvent.layout.y;
+                  }}>
                   <Text style={[styles.fieldLabel, { color: theme.text }]}>Price (₱ PHP) *</Text>
                   <Text style={[styles.fieldSubLabel, { color: theme.textSecondary }]}>
                     Set an affordable student price
@@ -629,6 +694,9 @@ export default function SellScreen() {
                       value={price}
                       onChangeText={setPrice}
                       keyboardType="numeric"
+                      onFocus={() => scrollToKey('price', 440)}
+                      returnKeyType="done"
+                      onSubmitEditing={Keyboard.dismiss}
                     />
                   </View>
 
@@ -661,7 +729,11 @@ export default function SellScreen() {
 
               {/* Wishlist Input if 'swap' */}
               {tradeType === 'swap' && (
-                <View style={styles.cardSection}>
+                <View
+                  style={styles.cardSection}
+                  onLayout={(e) => {
+                    fieldPositions.current['swap'] = e.nativeEvent.layout.y;
+                  }}>
                   <Text style={[styles.fieldLabel, { color: theme.text }]}>What would you like in trade?</Text>
                   <Text style={[styles.fieldSubLabel, { color: theme.textSecondary }]}>
                     State items or books you are currently seeking
@@ -679,12 +751,19 @@ export default function SellScreen() {
                     placeholderTextColor={theme.textMuted}
                     value={swapWishlist}
                     onChangeText={setSwapWishlist}
+                    onFocus={() => scrollToKey('swap', 440)}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
                   />
                 </View>
               )}
 
               {/* Description */}
-              <View style={styles.cardSection}>
+              <View
+                style={styles.cardSection}
+                onLayout={(e) => {
+                  fieldPositions.current['desc'] = e.nativeEvent.layout.y;
+                }}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Description (Optional)</Text>
                 <Text style={[styles.fieldSubLabel, { color: theme.textSecondary }]}>
                   Mention inclusions, highlights, or the semester it was used
@@ -705,6 +784,7 @@ export default function SellScreen() {
                   multiline
                   numberOfLines={4}
                   textAlignVertical="top"
+                  onFocus={() => scrollToKey('desc', 600)}
                 />
               </View>
             </View>
@@ -753,7 +833,11 @@ export default function SellScreen() {
               </View>
 
               {/* Safe Meetup Spot */}
-              <View style={styles.cardSection}>
+              <View
+                style={styles.cardSection}
+                onLayout={(e) => {
+                  fieldPositions.current['spot'] = e.nativeEvent.layout.y;
+                }}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Safe Campus Meetup Spot *</Text>
                 <Text style={[styles.fieldSubLabel, { color: theme.textSecondary }]}>
                   Meet at verified secure zones (well-lit lobbies or guard stations)
@@ -808,11 +892,18 @@ export default function SellScreen() {
                   placeholderTextColor={theme.textMuted}
                   value={safeMeetupSpot}
                   onChangeText={setSafeMeetupSpot}
+                  onFocus={() => scrollToKey('spot', 440)}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
                 />
               </View>
 
               {/* Academic Program & Year Target (Optional) */}
-              <View style={styles.cardSection}>
+              <View
+                style={styles.cardSection}
+                onLayout={(e) => {
+                  fieldPositions.current['course'] = e.nativeEvent.layout.y;
+                }}>
                 <Text style={[styles.fieldLabel, { color: theme.text }]}>Academic Program (Optional)</Text>
                 <TextInput
                   style={[
@@ -827,6 +918,9 @@ export default function SellScreen() {
                   placeholderTextColor={theme.textMuted}
                   value={courseTag}
                   onChangeText={setCourseTag}
+                  onFocus={() => scrollToKey('course', 540)}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
                 />
 
                 <Text style={[styles.fieldLabel, { color: theme.text, marginTop: Spacing.three }]}>
