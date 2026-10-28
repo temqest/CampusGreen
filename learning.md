@@ -291,5 +291,55 @@ This document captures project-specific design standards, user preferences, and 
   2. Extract universal principles (app-wide rules) rather than narrow screen-specific fixes.
   3. Update `learning.md` so that future agent sessions retain and build upon these lessons.
 
+---
 
+## 18. Mobile Chat Architecture & Real-Time Ergonomics
 
+- **Zero Pre-Filled Chat Option Chips**:
+  - Never render canned quick prompts or pre-filled message chips above the chat input dock (e.g. `"Can we meet today?"`, `"Is this available?"`).
+  - They create visual noise, conflict with the **Zero Pre-Selection Invariant**, and interfere with natural student conversation.
+  - The text input must remain clean, focused, and thumb-friendly with only an input field and a reactive send button.
+- **Auto-Scroll Behavior on Every New Message & Initial Open**:
+  - Mobile chat feeds must maintain visible focus on the newest messages.
+  - In `FlatList`, bind `ref={flatListRef}` and attach `onContentSizeChange={handleContentSizeChange}`.
+  - When opening or re-focusing a chat thread, the screen must immediately land at the very latest message (using `useFocusEffect` with staggered `scrollToEnd({ animated: false })` at 30ms, 120ms, and 280ms) so users never see an old offset or the top of the header agreement card.
+  - When a user sends a message or when a peer replies, the thread smoothly scrolls down to bring the new message into view (`scrollToEnd({ animated: true })`).
+- **Centralized Chat State & Inbox Synchronization**:
+  - Use `ChatProvider` (`src/context/chat-context.tsx`) wrapping the root navigator so message feeds and conversation lists are universally synced.
+  - Whenever a student sends a message (from product detail, basket, payment, or chat thread), the conversation must automatically update and bump to index 0 of the **Messages Inbox** (`src/app/(tabs)/chat.tsx`) with the new message preview and `timestamp: 'Just now'`.
+- **Contextual Peer Interactions & Typing Indicators**:
+  - When a message is sent in simulation/mock mode, display a lightweight, non-intrusive typing indicator bubble (`{sellerName} is typing...` with `ellipsis-horizontal` icon) followed by a realistic peer response referencing the specific safe campus meetup zone or trade deal type.
+- **In-Chat Photo Sharing Ergonomics**:
+  - Provide a dedicated photo attachment button (`camera-outline`) in the input dock.
+  - The photo picker action sheet offers **Live Camera** (`ImagePicker.launchCameraAsync`) and **Gallery** (`ImagePicker.launchImageLibraryAsync`).
+  - Selected images render as a compact draft thumbnail with a removal button (`(x)`) directly above the input field, allowing students to type an optional caption before hitting Send.
+  - Sent photos render in native bubble containers with rounded corners (`Radius.md`), optional caption text, timestamp, and tap-to-expand fullscreen modal viewer with dark overlay and close button.
+  - The Messages Inbox dynamically reflects photo messages (`📷 Sent a photo` or `📷 {caption}`) with real-time timestamp updates.
+
+### 19. Item Retrieval Handover & Buyer-to-Seller Peer Rating System (Chat Ergonomics)
+- **Unified Handover & Retrieval Agreement Flow**:
+  - All campus trades (`swap`, `free`, and `buy`) share an interactive `Campus Handover & Retrieval Agreement` card pinned in chat.
+  - State progression transitions smoothly:
+    1. `pending`: Displays handover details, meetup zone, offering, and "Confirm Meetup Plan" / "Accept Swap Trade" / "Confirm Freebie Acceptance".
+    2. `accepted`: Displays generated Campus Handover Pass (e.g. `PASS #BUY-5120`, `PASS #SWAP-8492`), safety instructions, and a primary CTA: **"Confirm Item Retrieval"**.
+    3. `completed`: Confirms successful inspection and item retrieval on campus.
+- **Triggered 1/5 Star Rating Pop-up Ergonomics**:
+  - Upon tapping **"Confirm Item Retrieval"**, the system:
+    1. Commits `agreementStatus` to `'completed'`.
+    2. Posts a verified system message into the chat feed confirming handover at the safe meetup spot.
+    3. Smoothly prompts the **Rating Pop-up Modal** after 380ms so the student sees their action confirmed before the review modal appears.
+- **Zero Pre-Selection Invariant in Rating Selectors**:
+  - Star ratings start completely unselected (`selectedStars = 0`), adhering to the Zero Pre-Selection Invariant.
+  - Interactive 1 to 5 star rating selector (`★ ★ ★ ★ ★`) built with `@expo/vector-icons` (`Ionicons` `star` / `star-outline`), warm amber gold (`#F59E0B`), and comfortable touch targets (hitSlop 8).
+  - Descriptive rating label updates dynamically:
+    - 0 stars: *"Tap a star to rate (1 to 5 stars)"* (Submit button disabled).
+    - 1/5: *Needs Improvement*
+    - 2/5: *Fair Handover*
+    - 3/5: *Good & Smooth*
+    - 4/5: *Great Experience!*
+    - 5/5: *Outstanding Seller!*
+  - Optional peer review tag chips (e.g., *Punctual Meetup*, *Item as Described*, *Friendly Peer*, *Smooth Handover*, *Fast Response*) and an optional written note input.
+  - Primary button (`Submit X/5 Rating`) and secondary dismiss action (`Maybe Later`).
+- **Post-Rating Persistence**:
+  - Submitting appends a verified review system entry in chat (`⭐ You rated {sellerName} ★★★★★ ({scoreLabel})`).
+  - The completed card in chat displays the buyer's review summary (`{score}/5 Stars · Verified Peer Review`) with an "Edit Rating" button, or an inviting "Rate {sellerName} (1–5 Stars)" button if previously skipped.

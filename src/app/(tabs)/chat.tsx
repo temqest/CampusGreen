@@ -13,85 +13,19 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 
+import { useChat } from '@/context/chat-context';
+
 type ChatFilter = 'all' | 'swap' | 'free' | 'buy';
-
-interface ChatConversation {
-  id: string;
-  itemId: string;
-  sellerName: string;
-  sellerYear: string;
-  itemTitle: string;
-  price: number | null;
-  tradeType: 'buy' | 'swap' | 'free';
-  lastMessage: string;
-  timestamp: string;
-  unreadCount: number;
-  safeMeetupSpot: string;
-}
-
-const MOCK_CONVERSATIONS: ChatConversation[] = [
-  {
-    id: 'conv-swap',
-    itemId: '4',
-    sellerName: 'Paolo Reyes',
-    sellerYear: '3rd Year Arch',
-    itemTitle: 'Drafting Board (24x36) with Rotring T-Square',
-    price: null,
-    tradeType: 'swap',
-    lastMessage: 'I’d love to swap for the desk study lamp! Tap accept to confirm trade.',
-    timestamp: '10m ago',
-    unreadCount: 1,
-    safeMeetupSpot: 'EA Building Security Guard Post',
-  },
-  {
-    id: 'conv-free',
-    itemId: '3',
-    sellerName: 'Bea Dimaculangan',
-    sellerYear: '2nd Year BSBA',
-    itemTitle: 'Pay-It-Forward: GenEd Reviewers & Readings Bundle',
-    price: null,
-    tradeType: 'free',
-    lastMessage: 'The reviewers are all set for you! Tap accept to confirm reservation.',
-    timestamp: '25m ago',
-    unreadCount: 1,
-    safeMeetupSpot: 'Student Pavilion (Gazebo Area)',
-  },
-  {
-    id: 'conv-buy-1',
-    itemId: '1',
-    sellerName: 'Maria Santos',
-    sellerYear: '3rd Year BSN',
-    itemTitle: 'AdNU College of Nursing Scrubs Set (Size M)',
-    price: 350,
-    tradeType: 'buy',
-    lastMessage: 'Sure! Let’s meet at Burns Hall lobby tomorrow around 2:30 PM.',
-    timestamp: '1h ago',
-    unreadCount: 0,
-    safeMeetupSpot: 'Nursing Bldg Lobby (Burns Hall)',
-  },
-  {
-    id: 'conv-buy-2',
-    itemId: '2',
-    sellerName: 'Kenzo Alcantara',
-    sellerYear: '4th Year BSCE',
-    itemTitle: 'Casio FX-991EX ClassWiz Scientific Calculator',
-    price: 850,
-    tradeType: 'buy',
-    lastMessage: 'PRC board seal is completely intact. Can bring it to Main Library anytime today.',
-    timestamp: '3h ago',
-    unreadCount: 0,
-    safeMeetupSpot: 'Main Library Ground Floor',
-  },
-];
 
 export default function ChatInboxScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { conversations, markAsRead } = useChat();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
 
-  const filteredConversations = MOCK_CONVERSATIONS.filter((c) => {
+  const filteredConversations = conversations.filter((c) => {
     const matchesFilter =
       activeFilter === 'all' ? true : c.tradeType === activeFilter;
     const matchesSearch =
@@ -261,7 +195,8 @@ export default function ChatInboxScreen() {
                   opacity: pressed ? 0.8 : 1,
                 },
               ]}
-              onPress={() =>
+              onPress={() => {
+                markAsRead(item.itemId);
                 router.push({
                   pathname: '/chat/[id]',
                   params: {
@@ -270,8 +205,8 @@ export default function ChatInboxScreen() {
                     itemTitle: item.itemTitle,
                     price: item.price !== null ? item.price.toString() : '0',
                   },
-                })
-              }>
+                });
+              }}>
               {/* Student Avatar */}
               <View
                 style={[
