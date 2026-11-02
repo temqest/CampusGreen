@@ -28,7 +28,6 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleLogin = () => {
@@ -48,15 +47,6 @@ export default function LoginScreen() {
       setIsLoading(false);
       router.replace('/(tabs)/marketplace');
     }, 450);
-  };
-
-  const handleGoogleLogin = () => {
-    setErrorMessage('');
-    setIsGoogleLoading(true);
-    setTimeout(() => {
-      setIsGoogleLoading(false);
-      router.replace('/(tabs)/marketplace');
-    }, 600);
   };
 
   return (
@@ -215,39 +205,6 @@ export default function LoginScreen() {
                   <Text style={styles.primaryButtonText}>Log In</Text>
                 )}
               </Pressable>
-
-              {/* Divider */}
-              <View style={styles.dividerRow}>
-                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-                <Text style={[styles.dividerText, { color: theme.textSecondary }]}>or</Text>
-                <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-              </View>
-
-              {/* Google Quick Sign-In */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Continue with Google"
-                onPress={handleGoogleLogin}
-                disabled={isGoogleLoading}
-                style={({ pressed }) => [
-                  styles.googleButton,
-                  {
-                    backgroundColor: pressed ? theme.surfaceSubtle : theme.surface,
-                    borderColor: theme.border,
-                    opacity: isGoogleLoading ? 0.7 : 1,
-                  },
-                ]}>
-                {isGoogleLoading ? (
-                  <ActivityIndicator color={theme.text} size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={18} color="#EA4335" style={styles.googleIcon} />
-                    <Text style={[styles.googleButtonText, { color: theme.text }]}>
-                      Continue with Google
-                    </Text>
-                  </>
-                )}
-              </Pressable>
             </View>
 
             {/* Bottom Switcher */}
@@ -395,39 +352,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
-  },
-
-  /* Divider */
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 4,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 13,
-    fontWeight: '500',
-  },
-
-  /* Google Button */
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 50,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-  },
-  googleIcon: {
-    marginRight: 10,
-  },
-  googleButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
   },
 
   /* Bottom Actions */

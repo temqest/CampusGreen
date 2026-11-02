@@ -31,7 +31,6 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleRegister = () => {
@@ -65,21 +64,6 @@ export default function RegisterScreen() {
         },
       });
     }, 400);
-  };
-
-  const handleGoogleSignUp = () => {
-    setErrorMessage('');
-    setIsGoogleLoading(true);
-    setTimeout(() => {
-      setIsGoogleLoading(false);
-      router.push({
-        pathname: '/(auth)/onboarding',
-        params: {
-          name: 'Google Student',
-          email: 'student@adnu.edu.ph',
-        },
-      });
-    }, 600);
   };
 
   return (
@@ -282,39 +266,6 @@ export default function RegisterScreen() {
                 <Text style={styles.primaryButtonText}>Continue</Text>
               )}
             </Pressable>
-
-            {/* Divider */}
-            <View style={styles.dividerRow}>
-              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-              <Text style={[styles.dividerText, { color: theme.textSecondary }]}>or</Text>
-              <View style={[styles.dividerLine, { backgroundColor: theme.border }]} />
-            </View>
-
-            {/* Google Sign-Up (Easily accessible at bottom) */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Sign up with Google"
-              onPress={handleGoogleSignUp}
-              disabled={isGoogleLoading}
-              style={({ pressed }) => [
-                styles.googleButton,
-                {
-                  backgroundColor: pressed ? theme.surfaceSubtle : theme.surface,
-                  borderColor: theme.border,
-                  opacity: isGoogleLoading ? 0.7 : 1,
-                },
-              ]}>
-              {isGoogleLoading ? (
-                <ActivityIndicator color={theme.text} size="small" />
-              ) : (
-                <>
-                  <Ionicons name="logo-google" size={18} color="#EA4335" style={styles.googleIcon} />
-                  <Text style={[styles.googleButtonText, { color: theme.text }]}>
-                    Sign up with Google
-                  </Text>
-                </>
-              )}
-            </Pressable>
           </View>
 
           {/* Bottom Switcher */}
@@ -395,39 +346,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     flex: 1,
-  },
-
-  /* Google Button */
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 50,
-    borderRadius: Radius.xl,
-    borderWidth: 1,
-  },
-  googleIcon: {
-    marginRight: 10,
-  },
-  googleButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-  },
-
-  /* Divider */
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.four,
-    gap: 12,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    fontSize: 13,
-    fontWeight: '500',
   },
 
   /* Form */
