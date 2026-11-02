@@ -389,4 +389,21 @@ This document captures project-specific design standards, user preferences, and 
 - **React 19 / React Native 0.88 Ref Typing**:
   - Do NOT type `useRef<ScrollView>(null)`. In React 19, `ScrollView` is typed as a component function with context properties, causing TS2339 / TS2322 errors on `.scrollTo()`. Always use `useRef<React.ElementRef<typeof ScrollView>>(null)`.
 
+### 23. Profile Screen: Natural Seller Growth Tools & Visibility Subscriptions
+- **Button Padding & Tap Target Sizing Invariant**:
+  - Primary action buttons and modal dismissal/confirmation buttons (e.g. `primaryCashOutBtn`, `modalPrimaryActionBtn`) must never have tight or unpadded boundaries.
+  - Always enforce `minHeight: 48` (standard mobile tap target), `paddingVertical: 14`, `paddingHorizontal: 20`, and explicit margin separation (`marginTop: Spacing.three` or `Spacing.four`) so text such as "Start Promoting My Items" and "Done" have generous breathing room and never look squished against receipt boxes.
+- **Hanging Promo Banner Visibility State**:
+  - The hanging subscription banner inside the profile card is exclusively for unsubscribed users (`!subscription.isActive`).
+  - Once the student purchases a subscription, the hanging promotional banner hides completely to keep the profile header minimal and uncluttered.
+  - Active subscription details (remaining bumps, urgent badges, and plan management) are cleanly presented in the dedicated active boost card (`subActiveCard`) in the seller dashboard section.
+- **Dual-State Visual Design**:
+  - **Unsubscribed**: Clean university-tone promo card (`subPromoCard`) explaining listing bumps and urgent badges with authentic student copy (no sparkles, no fake stats).
+  - **Subscribed**: Clean quota tracking card (`subActiveCard`) with real-time counters for remaining bumps (`X/Y`) and urgent badges (`A/B`), renewal date, and an Upgrade trigger.
+- **Clean Slate Invariant on Upgrade/Purchase**:
+  - When opening the subscription purchase modal sheet, start with `null` selections for both plan tier and payment source. Let the student intentionally tap their choice before enabling the checkout CTA.
+- **Integrated Quota Enforcement**:
+  - Tapping "Bump to Top" or toggling "Urgent Selling" on listings checks the active subscription quota. When exhausted or unsubscribed, gracefully present an action sheet prompting plan view instead of failing silently.
+
+
 

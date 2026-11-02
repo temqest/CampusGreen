@@ -76,6 +76,21 @@ export interface EscrowTransaction {
   counterpartName?: string;
 }
 
+export type SubscriptionTier = 'none' | 'weekly_boost' | 'semester_pass';
+
+export interface SellerSubscriptionState {
+  tier: SubscriptionTier;
+  tierName: string;
+  price: number;
+  expiresAt: string | null;
+  remainingBumps: number;
+  totalBumps: number;
+  remainingUrgentBadges: number;
+  totalUrgentBadges: number;
+  autoRenew: boolean;
+  isActive: boolean;
+}
+
 export interface WalletState {
   availableBalance: number;
   inEscrowBalance: number;

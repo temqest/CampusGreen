@@ -64,10 +64,24 @@ export default function ProfileScreen() {
     deleteItem,
     wallet,
     cashOut,
+    subscription,
+    subscribeSeller,
+    cancelSubscription,
   } = useItems();
 
   // Content tab: Active Listings, Sold, Purchases
   const [activeTab, setActiveTab] = useState<ListingTab>('active');
+
+  // Subscription Modal State (Clean Slate Invariant: starts unselected null)
+  const [isSubscriptionModalVisible, setIsSubscriptionModalVisible] = useState(false);
+  const [selectedSubTier, setSelectedSubTier] = useState<'weekly_boost' | 'semester_pass' | null>(null);
+  const [subPaymentMethod, setSubPaymentMethod] = useState<'wallet' | 'gcash' | 'maya' | null>(null);
+  const [isProcessingSub, setIsProcessingSub] = useState(false);
+  const [subSuccess, setSubSuccess] = useState<{
+    referenceCode: string;
+    tierName: string;
+    method: string;
+  } | null>(null);
 
   // Listing Management Modal (Replaces cramped 5-button card dock)
   const [manageItem, setManageItem] = useState<MarketplaceItem | null>(null);
@@ -160,15 +174,60 @@ export default function ProfileScreen() {
 
   // Handle Listing Bump
   const handleBump = (item: MarketplaceItem) => {
-    bumpItem(item.id);
+    const res = bumpItem(item.id);
+    if (!res.success) {
+      if (res.needsSubscription) {
+        Alert.alert(
+          'Boost Required',
+          res.message || 'You need an active Campus Boost subscription to bump listings.',
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'View Plans',
+              onPress: () => {
+                setSelectedSubTier(null);
+                setSubPaymentMethod(null);
+                setIsSubscriptionModalVisible(true);
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Cannot Bump', res.message || 'Unable to bump listing right now.');
+      }
+      return;
+    }
     setActionFeedback(`"${item.title.substring(0, 24)}..." bumped to top of feed!`);
     setTimeout(() => setActionFeedback(null), 3500);
   };
 
   // Handle Urgent Toggle
   const handleToggleUrgent = (item: MarketplaceItem) => {
-    toggleUrgent(item.id);
-    const newState = !item.isUrgent;
+    const willEnable = !item.isUrgent;
+    const res = toggleUrgent(item.id);
+    if (!res.success) {
+      if (res.needsSubscription) {
+        Alert.alert(
+          'Urgent Badge Requires Boost',
+          res.message || 'You need an active Campus Boost subscription to use Urgent Selling badges.',
+          [
+            { text: 'Later', style: 'cancel' },
+            {
+              text: 'View Plans',
+              onPress: () => {
+                setSelectedSubTier(null);
+                setSubPaymentMethod(null);
+                setIsSubscriptionModalVisible(true);
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert('Cannot Update', res.message || 'Unable to update urgent badge.');
+      }
+      return;
+    }
+    const newState = willEnable;
     if (manageItem?.id === item.id) {
       setManageItem({ ...manageItem, isUrgent: newState });
     }
@@ -178,6 +237,45 @@ export default function ProfileScreen() {
         : `Urgent badge removed.`
     );
     setTimeout(() => setActionFeedback(null), 3500);
+  };
+
+  // Handle Purchase Subscription
+  const handleExecuteSubscription = async () => {
+    if (!selectedSubTier) {
+      Alert.alert('Plan Selection Required', 'Please select either Weekly Sprint Boost or Semester Seller Pass.');
+      return;
+    }
+    if (!subPaymentMethod) {
+      Alert.alert('Payment Source Required', 'Please select Escrow Wallet, GCash, or Maya.');
+      return;
+    }
+
+    setIsProcessingSub(true);
+    setTimeout(async () => {
+      const result = await subscribeSeller(selectedSubTier, subPaymentMethod, defaultPayoutNumber);
+      setIsProcessingSub(false);
+      if (result.success) {
+        setSubSuccess({
+          referenceCode: result.referenceCode || 'CG-SUB-100234',
+          tierName: selectedSubTier === 'weekly_boost' ? 'Weekly Sprint Boost' : 'Semester Seller Pass',
+          method:
+            subPaymentMethod === 'wallet'
+              ? 'Escrow Cleared Balance'
+              : subPaymentMethod === 'gcash'
+              ? 'GCash'
+              : 'Maya',
+        });
+      } else {
+        Alert.alert('Subscription Failed', result.error || 'Please try again.');
+      }
+    }, 700);
+  };
+
+  const handleCloseSubscriptionModal = () => {
+    setIsSubscriptionModalVisible(false);
+    setSelectedSubTier(null);
+    setSubPaymentMethod(null);
+    setSubSuccess(null);
   };
 
   // Handle Toggle Reserved
@@ -581,6 +679,68 @@ export default function ProfileScreen() {
               <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>CO₂ Saved</Text>
             </View>
           </View>
+
+          {/* ================= HANGING SUBSCRIPTION BANNER (Hidden once subscribed) ================= */}
+          {!subscription.isActive && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Boost your item visibility with listing bumps and urgent badges. Tap to view plans."
+              style={({ pressed }) => [
+                styles.hangingSubBanner,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderColor: theme.borderSubtle,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              onPress={() => {
+                setSelectedSubTier(null);
+                setSubPaymentMethod(null);
+                setIsSubscriptionModalVisible(true);
+              }}>
+              <View
+                style={[
+                  styles.hangingSubIconCircle,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}>
+                <Ionicons
+                  name="rocket-outline"
+                  size={15}
+                  color={theme.primary}
+                />
+              </View>
+
+              <View style={styles.hangingSubMeta}>
+                <Text style={[styles.hangingSubTitle, { color: theme.text }]} numberOfLines={1}>
+                  Campus Boost
+                </Text>
+                <Text style={[styles.hangingSubSubtitle, { color: theme.textSecondary }]} numberOfLines={1}>
+                  Bumps & Urgent badges • From ₱29
+                </Text>
+              </View>
+
+              <View
+                style={[
+                  styles.hangingSubActionPill,
+                  {
+                    backgroundColor: theme.primary,
+                    borderColor: theme.primary,
+                  },
+                ]}>
+                <Text style={[styles.hangingSubActionText, { color: '#FFFFFF' }]}>
+                  Upgrade
+                </Text>
+                <Ionicons
+                  name="chevron-forward"
+                  size={12}
+                  color="#FFFFFF"
+                />
+              </View>
+            </Pressable>
+          )}
         </View>
 
         {/* Action Feedback Banner */}
@@ -682,6 +842,86 @@ export default function ProfileScreen() {
             </Text>
           </View>
         </View>
+
+        {/* ================= 2.5 SELLER VISIBILITY ACTIVE STATUS PILL (Shown when active) ================= */}
+        {subscription.isActive && (
+          <View
+            style={[
+              styles.subActiveCard,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}>
+            <View style={styles.subActiveHeader}>
+              <View style={styles.subActiveTitleGroup}>
+                <View style={[styles.subActiveIconCircle, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, borderWidth: 1 }]}>
+                  <Ionicons name="rocket-outline" size={16} color={theme.primary} />
+                </View>
+                <View style={styles.subActiveMetaGroup}>
+                  <Text style={[styles.subActivePlanName, { color: theme.text }]} numberOfLines={1}>
+                    {subscription.tierName}
+                  </Text>
+                  <Text style={[styles.subActiveExpiry, { color: theme.textSecondary }]} numberOfLines={1}>
+                    Active until {subscription.expiresAt}
+                  </Text>
+                </View>
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Manage or upgrade subscription"
+                style={[styles.subActiveManageBtn, { backgroundColor: theme.surfaceSubtle, borderColor: theme.border }]}
+                onPress={() => {
+                  setSelectedSubTier(null);
+                  setSubPaymentMethod(null);
+                  setIsSubscriptionModalVisible(true);
+                }}>
+                <Text style={[styles.subActiveManageText, { color: theme.text }]}>Manage</Text>
+              </Pressable>
+            </View>
+
+            {/* Quota Capsules */}
+            <View style={styles.subQuotaRow}>
+              {/* Bump Quota */}
+              <View
+                style={[
+                  styles.subQuotaCapsule,
+                  { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
+                ]}>
+                <View style={styles.subQuotaTopLine}>
+                  <Ionicons name="arrow-up-circle" size={16} color={theme.primary} />
+                  <Text style={[styles.subQuotaNumber, { color: theme.text }]}>
+                    {subscription.remainingBumps}
+                    <Text style={[styles.subQuotaTotal, { color: theme.textMuted }]}>
+                      /{subscription.totalBumps}
+                    </Text>
+                  </Text>
+                </View>
+                <Text style={[styles.subQuotaLabel, { color: theme.textSecondary }]}>
+                  Listing Bumps Left
+                </Text>
+              </View>
+
+              {/* Urgent Badges Quota */}
+              <View
+                style={[
+                  styles.subQuotaCapsule,
+                  { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
+                ]}>
+                <View style={styles.subQuotaTopLine}>
+                  <Ionicons name="flash" size={16} color="#DC2626" />
+                  <Text style={[styles.subQuotaNumber, { color: theme.text }]}>
+                    {subscription.remainingUrgentBadges}
+                    <Text style={[styles.subQuotaTotal, { color: theme.textMuted }]}>
+                      /{subscription.totalUrgentBadges}
+                    </Text>
+                  </Text>
+                </View>
+                <Text style={[styles.subQuotaLabel, { color: theme.textSecondary }]}>
+                  Urgent Badges Left
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {/* ================= 3. MARKETPLACE LISTINGS SEGMENT TABS ================= */}
         <View style={styles.segmentedTabsContainer}>
@@ -1175,6 +1415,34 @@ export default function ProfileScreen() {
 
             <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
 
+            {/* Row 4.5: Campus Boost Subscription & Growth Tool Plan */}
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Manage Campus Boost Seller Subscription"
+              style={styles.accountRow}
+              onPress={() => {
+                setSelectedSubTier(null);
+                setSubPaymentMethod(null);
+                setIsSubscriptionModalVisible(true);
+              }}>
+              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
+                <Ionicons name="rocket-outline" size={17} color={theme.primary} />
+              </View>
+              <View style={styles.accountRowContent}>
+                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
+                  Campus Boost Subscription
+                </Text>
+                <Text style={[styles.accountRowValue, { color: subscription.isActive ? theme.primary : theme.textSecondary }]}>
+                  {subscription.isActive
+                    ? `${subscription.tierName} • Active`
+                    : 'Unlock listing bumps & urgent badges'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
+            </Pressable>
+
+            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
+
             {/* Row 5: Campus Institutional Verification */}
             <View style={styles.accountRow}>
               <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
@@ -1448,6 +1716,390 @@ export default function ProfileScreen() {
                 </View>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ================= 8.5 SELLER VISIBILITY SUBSCRIPTION MODAL ================= */}
+      <Modal
+        visible={isSubscriptionModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={handleCloseSubscriptionModal}>
+        <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalBackdrop} onPress={handleCloseSubscriptionModal} />
+          <View
+            style={[
+              styles.modalSheet,
+              { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 },
+            ]}>
+            <View style={styles.modalDragNotch} />
+
+            {/* Header */}
+            <View style={styles.subModalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.subModalTitle, { color: theme.text }]}>
+                  Campus Boost Subscription
+                </Text>
+                <Text style={[styles.subModalSubtitle, { color: theme.textSecondary }]}>
+                  Promote items with listing bumps & urgent selling tags
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close subscription modal"
+                onPress={handleCloseSubscriptionModal}
+                style={styles.modalCloseBtn}>
+                <Ionicons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+              {subSuccess ? (
+                /* Success State */
+                <View style={styles.subSuccessBox}>
+                  <View style={[styles.subSuccessIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
+                    <Ionicons name="checkmark-circle" size={42} color={theme.primary} />
+                  </View>
+                  <Text style={[styles.subSuccessTitle, { color: theme.text }]}>
+                    Boost Activated!
+                  </Text>
+                  <Text style={[styles.subSuccessDesc, { color: theme.textSecondary }]}>
+                    You are now subscribed to {subSuccess.tierName}. Your listing bumps and urgent badges are immediately ready to use.
+                  </Text>
+
+                  <View
+                    style={[
+                      styles.subReceiptCard,
+                      { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
+                    ]}>
+                    <View style={styles.subReceiptRow}>
+                      <Text style={[styles.subReceiptLabel, { color: theme.textSecondary }]}>Ref Code</Text>
+                      <Text style={[styles.subReceiptVal, { color: theme.text, fontWeight: '700' }]}>
+                        {subSuccess.referenceCode}
+                      </Text>
+                    </View>
+                    <View style={styles.subReceiptRow}>
+                      <Text style={[styles.subReceiptLabel, { color: theme.textSecondary }]}>Payment Source</Text>
+                      <Text style={[styles.subReceiptVal, { color: theme.text }]}>
+                        {subSuccess.method}
+                      </Text>
+                    </View>
+                    <View style={styles.subReceiptRow}>
+                      <Text style={[styles.subReceiptLabel, { color: theme.textSecondary }]}>Status</Text>
+                      <Text style={[styles.subReceiptVal, { color: theme.primary, fontWeight: '700' }]}>
+                        Active
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Done"
+                    style={[styles.primaryCashOutBtn, { backgroundColor: theme.primary, marginTop: 16 }]}
+                    onPress={handleCloseSubscriptionModal}>
+                    <Text style={styles.primaryCashOutBtnText}>Start Promoting My Items</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={{ gap: 16 }}>
+                  {/* Active Subscription Status Banner if already active */}
+                  {subscription.isActive && (
+                    <View
+                      style={[
+                        styles.subCurrentPlanNotice,
+                        { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
+                      ]}>
+                      <Ionicons name="information-circle" size={16} color={theme.text} />
+                      <Text style={[styles.subCurrentPlanNoticeText, { color: theme.textSecondary }]}>
+                        Currently on <Text style={{ fontWeight: '700', color: theme.text }}>{subscription.tierName}</Text> ({subscription.remainingBumps} bumps, {subscription.remainingUrgentBadges} urgent tags left). Upgrading extends your benefits!
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Section 1: Choose Boost Plan (Clean Slate Invariant) */}
+                  <View>
+                    <Text style={[styles.subSectionTitle, { color: theme.textSecondary }]}>
+                      1. CHOOSE YOUR PLAN
+                    </Text>
+
+                    <View style={{ gap: 10, marginTop: 8 }}>
+                      {/* Tier Option A: Weekly Sprint Boost */}
+                      <Pressable
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: selectedSubTier === 'weekly_boost' }}
+                        accessibilityLabel="Weekly Sprint Boost, 29 pesos per week"
+                        style={[
+                          styles.subTierOptionCard,
+                          {
+                            backgroundColor: selectedSubTier === 'weekly_boost' ? theme.surfaceSubtle : theme.surface,
+                            borderColor: selectedSubTier === 'weekly_boost' ? theme.primary : theme.border,
+                            borderWidth: selectedSubTier === 'weekly_boost' ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setSelectedSubTier('weekly_boost')}>
+                        <View style={styles.subTierOptionHeader}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={[styles.subTierOptionName, { color: theme.text }]}>
+                                Weekly Sprint Boost
+                              </Text>
+                            </View>
+                            <Text style={[styles.subTierOptionDuration, { color: theme.textSecondary }]}>
+                              7-day quick seller pass
+                            </Text>
+                          </View>
+
+                          <View style={styles.subTierPriceCol}>
+                            <Text style={[styles.subTierPrice, { color: theme.text }]}>₱29</Text>
+                            <Text style={[styles.subTierPricePeriod, { color: theme.textMuted }]}>/week</Text>
+                          </View>
+                        </View>
+
+                        <View style={[styles.subTierPerksList, { borderTopColor: theme.borderSubtle }]}>
+                          <View style={styles.subTierPerkRow}>
+                            <Ionicons name="checkmark" size={14} color={theme.primary} />
+                            <Text style={[styles.subTierPerkText, { color: theme.text }]}>
+                              <Text style={{ fontWeight: '700' }}>5 Listing Bumps</Text> to jump to top of feed
+                            </Text>
+                          </View>
+                          <View style={styles.subTierPerkRow}>
+                            <Ionicons name="checkmark" size={14} color={theme.primary} />
+                            <Text style={[styles.subTierPerkText, { color: theme.text }]}>
+                              <Text style={{ fontWeight: '700' }}>2 Urgent Selling Badges</Text> for rapid disposal
+                            </Text>
+                          </View>
+                        </View>
+                      </Pressable>
+
+                      {/* Tier Option B: Semester Seller Pass */}
+                      <Pressable
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: selectedSubTier === 'semester_pass' }}
+                        accessibilityLabel="Semester Seller Pass, 89 pesos per term"
+                        style={[
+                          styles.subTierOptionCard,
+                          {
+                            backgroundColor: selectedSubTier === 'semester_pass' ? theme.surfaceSubtle : theme.surface,
+                            borderColor: selectedSubTier === 'semester_pass' ? theme.primary : theme.border,
+                            borderWidth: selectedSubTier === 'semester_pass' ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setSelectedSubTier('semester_pass')}>
+                        <View style={styles.subTierOptionHeader}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={[styles.subTierOptionName, { color: theme.text }]}>
+                                Semester Seller Pass
+                              </Text>
+                              <View style={[styles.bestValueTag, { backgroundColor: theme.primary }]}>
+                                <Text style={styles.bestValueTagText}>BEST VALUE</Text>
+                              </View>
+                            </View>
+                            <Text style={[styles.subTierOptionDuration, { color: theme.textSecondary }]}>
+                              Full 4-month term visibility
+                            </Text>
+                          </View>
+
+                          <View style={styles.subTierPriceCol}>
+                            <Text style={[styles.subTierPrice, { color: theme.text }]}>₱89</Text>
+                            <Text style={[styles.subTierPricePeriod, { color: theme.textMuted }]}>/term</Text>
+                          </View>
+                        </View>
+
+                        <View style={[styles.subTierPerksList, { borderTopColor: theme.borderSubtle }]}>
+                          <View style={styles.subTierPerkRow}>
+                            <Ionicons name="checkmark" size={14} color={theme.primary} />
+                            <Text style={[styles.subTierPerkText, { color: theme.text }]}>
+                              <Text style={{ fontWeight: '700' }}>25 Listing Bumps</Text> (₱1.16 / bump equivalent)
+                            </Text>
+                          </View>
+                          <View style={styles.subTierPerkRow}>
+                            <Ionicons name="checkmark" size={14} color={theme.primary} />
+                            <Text style={[styles.subTierPerkText, { color: theme.text }]}>
+                              <Text style={{ fontWeight: '700' }}>10 Urgent Badges</Text> for course materials
+                            </Text>
+                          </View>
+                          <View style={styles.subTierPerkRow}>
+                            <Ionicons name="checkmark" size={14} color={theme.primary} />
+                            <Text style={[styles.subTierPerkText, { color: theme.text }]}>
+                              Priority search placement across campus
+                            </Text>
+                          </View>
+                        </View>
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Section 2: Payment Method */}
+                  <View>
+                    <Text style={[styles.subSectionTitle, { color: theme.textSecondary }]}>
+                      2. PAYMENT METHOD
+                    </Text>
+
+                    <View style={{ gap: 8, marginTop: 8 }}>
+                      {/* Option 1: Escrow Wallet Balance */}
+                      <Pressable
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: subPaymentMethod === 'wallet' }}
+                        accessibilityLabel={`Escrow Wallet Available Balance: ₱${wallet.availableBalance}`}
+                        style={[
+                          styles.subPaymentMethodCard,
+                          {
+                            backgroundColor: subPaymentMethod === 'wallet' ? theme.surfaceSubtle : theme.surface,
+                            borderColor: subPaymentMethod === 'wallet' ? theme.primary : theme.border,
+                            borderWidth: subPaymentMethod === 'wallet' ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setSubPaymentMethod('wallet')}>
+                        <View style={[styles.subPaymentIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
+                          <Ionicons name="shield-checkmark" size={16} color={theme.primary} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.subPaymentTitle, { color: theme.text }]}>
+                            Escrow Cleared Balance
+                          </Text>
+                          <Text style={[styles.subPaymentSub, { color: theme.textSecondary }]}>
+                            ₱{wallet.availableBalance.toLocaleString('en-US', { minimumFractionDigits: 2 })} available
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={subPaymentMethod === 'wallet' ? 'radio-button-on' : 'radio-button-off'}
+                          size={18}
+                          color={subPaymentMethod === 'wallet' ? theme.primary : theme.textMuted}
+                        />
+                      </Pressable>
+
+                      {/* Option 2: GCash */}
+                      <Pressable
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: subPaymentMethod === 'gcash' }}
+                        accessibilityLabel="GCash E-Wallet"
+                        style={[
+                          styles.subPaymentMethodCard,
+                          {
+                            backgroundColor: subPaymentMethod === 'gcash' ? theme.surfaceSubtle : theme.surface,
+                            borderColor: subPaymentMethod === 'gcash' ? theme.primary : theme.border,
+                            borderWidth: subPaymentMethod === 'gcash' ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setSubPaymentMethod('gcash')}>
+                        <View style={[styles.subPaymentIconCircle, { backgroundColor: '#EFF6FF', borderColor: '#DBEAFE', borderWidth: 1 }]}>
+                          <Image source={GCASH_LOGO} style={{ width: 22, height: 22 }} contentFit="contain" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.subPaymentTitle, { color: theme.text }]}>
+                            GCash
+                          </Text>
+                          <Text style={[styles.subPaymentSub, { color: theme.textSecondary }]}>
+                            Instant mobile wallet checkout
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={subPaymentMethod === 'gcash' ? 'radio-button-on' : 'radio-button-off'}
+                          size={18}
+                          color={subPaymentMethod === 'gcash' ? theme.primary : theme.textMuted}
+                        />
+                      </Pressable>
+
+                      {/* Option 3: Maya */}
+                      <Pressable
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: subPaymentMethod === 'maya' }}
+                        accessibilityLabel="Maya E-Wallet"
+                        style={[
+                          styles.subPaymentMethodCard,
+                          {
+                            backgroundColor: subPaymentMethod === 'maya' ? theme.surfaceSubtle : theme.surface,
+                            borderColor: subPaymentMethod === 'maya' ? theme.primary : theme.border,
+                            borderWidth: subPaymentMethod === 'maya' ? 2 : 1,
+                          },
+                        ]}
+                        onPress={() => setSubPaymentMethod('maya')}>
+                        <View style={[styles.subPaymentIconCircle, { backgroundColor: '#0A1810', borderColor: '#183824', borderWidth: 1 }]}>
+                          <Image source={MAYA_LOGO} style={{ width: 22, height: 22 }} contentFit="contain" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.subPaymentTitle, { color: theme.text }]}>
+                            Maya
+                          </Text>
+                          <Text style={[styles.subPaymentSub, { color: theme.textSecondary }]}>
+                            Scan to pay or linked mobile account
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={subPaymentMethod === 'maya' ? 'radio-button-on' : 'radio-button-off'}
+                          size={18}
+                          color={subPaymentMethod === 'maya' ? theme.primary : theme.textMuted}
+                        />
+                      </Pressable>
+                    </View>
+                  </View>
+
+                  {/* Pricing Summary & Checkout Button */}
+                  <View style={{ marginTop: 8 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel="Subscribe and activate boost"
+                      disabled={isProcessingSub || !selectedSubTier || !subPaymentMethod}
+                      style={[
+                        styles.primaryCashOutBtn,
+                        {
+                          backgroundColor:
+                            !selectedSubTier || !subPaymentMethod
+                              ? theme.border
+                              : theme.primary,
+                        },
+                      ]}
+                      onPress={handleExecuteSubscription}>
+                      {isProcessingSub ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <>
+                          <Ionicons name="rocket-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                          <Text style={styles.primaryCashOutBtnText}>
+                            {selectedSubTier
+                              ? `Pay ₱${selectedSubTier === 'weekly_boost' ? '29.00' : '89.00'} & Activate Boost`
+                              : 'Select a Plan to Continue'}
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+
+                    {/* Unsubscribe Option if already active */}
+                    {subscription.isActive && (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel="Cancel active subscription"
+                        style={{ alignItems: 'center', marginTop: 12, paddingVertical: 6 }}
+                        onPress={() => {
+                          Alert.alert(
+                            'Cancel Subscription',
+                            'Are you sure you want to cancel your Campus Boost subscription? Your remaining bumps and badges will be cleared.',
+                            [
+                              { text: 'Keep Plan', style: 'cancel' },
+                              {
+                                text: 'Cancel Plan',
+                                style: 'destructive',
+                                onPress: () => {
+                                  cancelSubscription();
+                                  handleCloseSubscriptionModal();
+                                  setActionFeedback('Subscription cancelled.');
+                                  setTimeout(() => setActionFeedback(null), 3000);
+                                },
+                              },
+                            ]
+                          );
+                        }}>
+                        <Text style={{ fontSize: 13, color: theme.error, fontWeight: '600' }}>
+                          Cancel Campus Boost Subscription
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                </View>
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -2802,13 +3454,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    minHeight: 48,
     borderRadius: Radius.md,
   },
   primaryCashOutBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
   walletFooterNotice: {
     flexDirection: 'row',
@@ -3328,15 +3983,20 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalPrimaryActionBtn: {
-    paddingVertical: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    minHeight: 48,
     borderRadius: Radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    width: '100%',
+    marginTop: Spacing.three,
   },
   modalPrimaryActionText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
 
   /* Success View */
@@ -3679,6 +4339,361 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   yearLevelChipText: {
+    fontSize: 12,
+  },
+  /* ================= HANGING SUBSCRIPTION BANNER STYLES ================= */
+  hangingSubBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    marginTop: 4,
+    gap: 10,
+  },
+  hangingSubIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  hangingSubMeta: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  hangingSubTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  hangingSubTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  hangingSubBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: Radius.full,
+  },
+  hangingSubBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  hangingSubSubtitle: {
+    fontSize: 11,
+  },
+  hangingSubActionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    gap: 3,
+    flexShrink: 0,
+  },
+  hangingSubActionText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  /* ================= SUBSCRIPTION BOX & MODAL STYLES ================= */
+  subActiveCard: {
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.four,
+  },
+  subActiveHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  subActiveTitleGroup: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  subActiveIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  subActiveMetaGroup: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  subActivePlanName: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  subActiveExpiry: {
+    fontSize: 12,
+  },
+  subActiveManageBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    flexShrink: 0,
+  },
+  subActiveManageText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  subQuotaRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  subQuotaCapsule: {
+    flex: 1,
+    padding: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  subQuotaTopLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  subQuotaNumber: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  subQuotaTotal: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  subQuotaLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  subActiveFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+  },
+  subActiveFooterText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  subPromoCard: {
+    marginHorizontal: Spacing.four,
+    marginBottom: Spacing.four,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    padding: Spacing.four,
+  },
+  subPromoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  subPromoIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subPromoTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  subPromoSubtitle: {
+    fontSize: 12,
+    marginTop: 1,
+  },
+  subFeatureList: {
+    marginTop: 12,
+    gap: 8,
+  },
+  subFeatureItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  subFeatureText: {
+    fontSize: 12,
+    flex: 1,
+  },
+  subPromoBtn: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: Radius.md,
+  },
+  subPromoBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  /* Modal Specific Styles */
+  subModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  subModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  subModalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  subCurrentPlanNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  subCurrentPlanNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  subSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  subTierOptionCard: {
+    padding: 14,
+    borderRadius: Radius.lg,
+  },
+  subTierOptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  subTierOptionName: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  subTierOptionDuration: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  subTierPriceCol: {
+    alignItems: 'flex-end',
+  },
+  subTierPrice: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  subTierPricePeriod: {
+    fontSize: 11,
+  },
+  subTierPerksList: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    gap: 6,
+  },
+  subTierPerkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  subTierPerkText: {
+    fontSize: 12,
+    flex: 1,
+  },
+  bestValueTag: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+  },
+  bestValueTagText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  subPaymentMethodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: Radius.md,
+    gap: 12,
+  },
+  subPaymentIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  subPaymentTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  subPaymentSub: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  subSuccessBox: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+  },
+  subSuccessIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  subSuccessTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 6,
+  },
+  subSuccessDesc: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  subReceiptCard: {
+    width: '100%',
+    padding: 14,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    gap: 8,
+  },
+  subReceiptRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  subReceiptLabel: {
+    fontSize: 12,
+  },
+  subReceiptVal: {
     fontSize: 12,
   },
 });

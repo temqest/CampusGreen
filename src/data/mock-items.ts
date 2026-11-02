@@ -1,4 +1,17 @@
-import { GreenImpactStats, MarketplaceItem, WalletState } from '@/types/item';
+import { GreenImpactStats, MarketplaceItem, SellerSubscriptionState, WalletState } from '@/types/item';
+
+export const INITIAL_SUBSCRIPTION_STATE: SellerSubscriptionState = {
+  tier: 'none',
+  tierName: 'Free Seller',
+  price: 0,
+  expiresAt: null,
+  remainingBumps: 0,
+  totalBumps: 0,
+  remainingUrgentBadges: 0,
+  totalUrgentBadges: 0,
+  autoRenew: false,
+  isActive: false,
+};
 
 export const INITIAL_GREEN_IMPACT: GreenImpactStats = {
   co2SavedKg: 142.6,

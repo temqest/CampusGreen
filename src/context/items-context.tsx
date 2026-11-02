@@ -1,11 +1,23 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { EscrowTransaction, MarketplaceItem, WalletState } from '@/types/item';
-import { INITIAL_WALLET_STATE, MOCK_ITEMS } from '@/data/mock-items';
+import { EscrowTransaction, MarketplaceItem, SellerSubscriptionState, WalletState } from '@/types/item';
+import { INITIAL_SUBSCRIPTION_STATE, INITIAL_WALLET_STATE, MOCK_ITEMS } from '@/data/mock-items';
 
 interface CashOutResult {
   success: boolean;
   referenceCode: string;
   error?: string;
+}
+
+interface SubscriptionResult {
+  success: boolean;
+  referenceCode?: string;
+  error?: string;
+}
+
+interface GrowthActionResult {
+  success: boolean;
+  message?: string;
+  needsSubscription?: boolean;
 }
 
 interface ItemsContextType {
@@ -14,14 +26,22 @@ interface ItemsContextType {
   getItemById: (id: string) => MarketplaceItem | undefined;
   resetItems: () => void;
   // Seller Growth Tools
-  bumpItem: (id: string) => void;
-  toggleUrgent: (id: string) => void;
+  bumpItem: (id: string) => GrowthActionResult;
+  toggleUrgent: (id: string) => GrowthActionResult;
   setItemStatus: (id: string, status: 'active' | 'reserved' | 'sold') => void;
   deleteItem: (id: string) => void;
   // Escrow Wallet & Cash-Out
   wallet: WalletState;
   cashOut: (amount: number, channel: 'gcash' | 'maya', accountNumber: string) => Promise<CashOutResult>;
   releaseEscrow: (transactionId: string) => void;
+  // Seller Subscription
+  subscription: SellerSubscriptionState;
+  subscribeSeller: (
+    tier: 'weekly_boost' | 'semester_pass',
+    paymentMethod: 'wallet' | 'gcash' | 'maya',
+    accountNumber?: string
+  ) => Promise<SubscriptionResult>;
+  cancelSubscription: () => void;
 }
 
 const ItemsContext = createContext<ItemsContextType | undefined>(undefined);
@@ -29,6 +49,7 @@ const ItemsContext = createContext<ItemsContextType | undefined>(undefined);
 export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<MarketplaceItem[]>(MOCK_ITEMS);
   const [wallet, setWallet] = useState<WalletState>(INITIAL_WALLET_STATE);
+  const [subscription, setSubscription] = useState<SellerSubscriptionState>(INITIAL_SUBSCRIPTION_STATE);
 
   const addItem = useCallback((newItem: MarketplaceItem) => {
     setItems((prev) => [newItem, ...prev]);
@@ -42,10 +63,19 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const resetItems = useCallback(() => {
     setItems(MOCK_ITEMS);
     setWallet(INITIAL_WALLET_STATE);
+    setSubscription(INITIAL_SUBSCRIPTION_STATE);
   }, []);
 
   // Growth Tool 1: Bump listing to top of discovery feed
-  const bumpItem = useCallback((id: string) => {
+  const bumpItem = useCallback((id: string): GrowthActionResult => {
+    if (!subscription.isActive || subscription.remainingBumps <= 0) {
+      return {
+        success: false,
+        needsSubscription: true,
+        message: 'No remaining bumps. Upgrade to Campus Boost to bump your listings!',
+      };
+    }
+
     setItems((prev) => {
       const targetIndex = prev.findIndex((i) => i.id === id);
       if (targetIndex === -1) return prev;
@@ -60,14 +90,43 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       const rest = prev.filter((i) => i.id !== id);
       return [updated, ...rest];
     });
-  }, []);
+
+    setSubscription((prev) => ({
+      ...prev,
+      remainingBumps: Math.max(0, prev.remainingBumps - 1),
+    }));
+
+    return { success: true };
+  }, [subscription.isActive, subscription.remainingBumps]);
 
   // Growth Tool 2: Toggle Urgent Selling Badge
-  const toggleUrgent = useCallback((id: string) => {
+  const toggleUrgent = useCallback((id: string): GrowthActionResult => {
+    const target = items.find((i) => i.id === id);
+    if (!target) return { success: false, message: 'Item not found.' };
+
+    const willEnable = !target.isUrgent;
+
+    if (willEnable && (!subscription.isActive || subscription.remainingUrgentBadges <= 0)) {
+      return {
+        success: false,
+        needsSubscription: true,
+        message: 'No remaining Urgent badges. Upgrade to Campus Boost to add Urgent badges!',
+      };
+    }
+
     setItems((prev) =>
       prev.map((i) => (i.id === id ? { ...i, isUrgent: !i.isUrgent } : i))
     );
-  }, []);
+
+    if (willEnable) {
+      setSubscription((prev) => ({
+        ...prev,
+        remainingUrgentBadges: Math.max(0, prev.remainingUrgentBadges - 1),
+      }));
+    }
+
+    return { success: true };
+  }, [items, subscription.isActive, subscription.remainingUrgentBadges]);
 
   // Item lifecycle state
   const setItemStatus = useCallback((id: string, status: 'active' | 'reserved' | 'sold') => {
@@ -148,6 +207,92 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // Seller Subscription Purchase
+  const subscribeSeller = useCallback(
+    async (
+      tier: 'weekly_boost' | 'semester_pass',
+      paymentMethod: 'wallet' | 'gcash' | 'maya',
+      accountNumber?: string
+    ): Promise<SubscriptionResult> => {
+      const price = tier === 'weekly_boost' ? 29 : 89;
+      const tierName = tier === 'weekly_boost' ? 'Weekly Sprint Boost' : 'Semester Seller Pass';
+      const totalBumps = tier === 'weekly_boost' ? 5 : 25;
+      const totalUrgent = tier === 'weekly_boost' ? 2 : 10;
+      const durationDays = tier === 'weekly_boost' ? 7 : 120;
+      
+      const expiry = new Date();
+      expiry.setDate(expiry.getDate() + durationDays);
+      const expiryStr = expiry.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      });
+
+      if (paymentMethod === 'wallet') {
+        if (wallet.availableBalance < price) {
+          return {
+            success: false,
+            error: `Insufficient Escrow Wallet balance. You need ₱${price.toFixed(2)} (Available: ₱${wallet.availableBalance.toFixed(2)}).`,
+          };
+        }
+      }
+
+      const referenceCode = 'CG-SUB-' + Math.floor(100000 + Math.random() * 900000);
+
+      // Create transaction record
+      const newTx: EscrowTransaction = {
+        id: `tx_sub_${Date.now()}`,
+        type: 'cash_out',
+        title: `Subscription: ${tierName}`,
+        amount: price,
+        date: 'Just now',
+        status: 'completed',
+        referenceCode,
+        channel: paymentMethod === 'wallet' ? undefined : paymentMethod,
+        notes: `Paid via ${
+          paymentMethod === 'wallet'
+            ? 'Escrow Cleared Balance'
+            : paymentMethod === 'gcash'
+            ? 'GCash'
+            : 'Maya'
+        }.`,
+      };
+
+      if (paymentMethod === 'wallet') {
+        setWallet((prev) => ({
+          ...prev,
+          availableBalance: prev.availableBalance - price,
+          transactions: [newTx, ...prev.transactions],
+        }));
+      } else {
+        setWallet((prev) => ({
+          ...prev,
+          transactions: [newTx, ...prev.transactions],
+        }));
+      }
+
+      setSubscription({
+        tier,
+        tierName,
+        price,
+        expiresAt: expiryStr,
+        remainingBumps: totalBumps,
+        totalBumps,
+        remainingUrgentBadges: totalUrgent,
+        totalUrgentBadges: totalUrgent,
+        autoRenew: true,
+        isActive: true,
+      });
+
+      return { success: true, referenceCode };
+    },
+    [wallet.availableBalance]
+  );
+
+  const cancelSubscription = useCallback(() => {
+    setSubscription(INITIAL_SUBSCRIPTION_STATE);
+  }, []);
+
   const value = useMemo(
     () => ({
       items,
@@ -161,6 +306,9 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       wallet,
       cashOut,
       releaseEscrow,
+      subscription,
+      subscribeSeller,
+      cancelSubscription,
     }),
     [
       items,
@@ -174,6 +322,9 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       wallet,
       cashOut,
       releaseEscrow,
+      subscription,
+      subscribeSeller,
+      cancelSubscription,
     ]
   );
 
