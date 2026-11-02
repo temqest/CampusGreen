@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -17,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useItems } from '@/context/items-context';
+import { useChat } from '@/context/chat-context';
 import { saveOrderToSupabase, saveTransactionToSupabase } from '@/lib/database';
 
 type PaymentMethod = 'cod' | 'gcash' | 'maya';
@@ -30,9 +33,38 @@ export default function PaymentScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { items, setItemStatus } = useItems();
+  const { ensureConversation, addSystemMessage } = useChat();
 
   const item = items.find((i) => i.id === id) || items[0];
   const itemPrice = item.price ?? 0;
+
+  // Prevent purchasing own listing
+  useEffect(() => {
+    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+      let currentUserId = '';
+      let currentUserName = '';
+      if (str) {
+        try {
+          const parsed = JSON.parse(str);
+          if (parsed.id) currentUserId = parsed.id;
+          if (parsed.fullName) currentUserName = parsed.fullName.trim().toLowerCase();
+        } catch {}
+      }
+
+      const isOwner =
+        (!!currentUserId && item.sellerId === currentUserId) ||
+        (item as any).isOwner === true ||
+        (!!currentUserName && item.sellerName.trim().toLowerCase() === currentUserName);
+
+      if (isOwner) {
+        Alert.alert(
+          'Action Not Allowed',
+          'You cannot purchase or escrow your own listed item.',
+          [{ text: 'Go Back', onPress: () => router.back() }]
+        );
+      }
+    });
+  }, [item, router]);
 
   // Zero Pre-Selection Invariant: Options must start unselected (null)
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
@@ -63,30 +95,51 @@ export default function PaymentScreen() {
       if (item) {
         setItemStatus(item.id, 'reserved');
 
-        saveOrderToSupabase({
-          id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          itemId: item.id,
-          title: item.title,
-          price: itemPrice,
-          sellerName: item.sellerName,
-          safeMeetupSpot: item.safeMeetupSpot,
-          escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
-          referenceCode: code,
-          channel: selectedMethod,
-        }).catch((err) => console.warn('Supabase saveOrder error:', err));
+        // Ensure chat conversation exists and add payment confirmation notice
+        ensureConversation(item);
+        addSystemMessage(
+          item.id,
+          `💳 Purchase Initiated! Escrow payment for "${item.title}" (₱${itemPrice.toLocaleString()}) confirmed via ${
+            selectedMethod === 'cod' ? 'Cash on Delivery' : selectedMethod.toUpperCase()
+          }. Reference #${code}. Meetup zone: ${item.safeMeetupSpot}.`
+        );
 
-        saveTransactionToSupabase({
-          id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
-          type: 'incoming_escrow',
-          title: `Payment: ${item.title.substring(0, 32)}`,
-          amount: itemPrice,
-          date: 'Just now',
-          status: 'completed',
-          referenceCode: code,
-          channel: selectedMethod,
-          counterpartName: item.sellerName,
-          notes: `Handover at ${item.safeMeetupSpot}`,
-        }).catch((err) => console.warn('Supabase saveTransaction error:', err));
+        AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+          let activeUserId = 'user_active_student';
+          if (str) {
+            try {
+              const parsed = JSON.parse(str);
+              if (parsed.id) activeUserId = parsed.id;
+            } catch {}
+          }
+
+          saveOrderToSupabase({
+            id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            itemId: item.id,
+            userId: activeUserId,
+            title: item.title,
+            price: itemPrice,
+            sellerName: item.sellerName,
+            safeMeetupSpot: item.safeMeetupSpot,
+            escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
+            referenceCode: code,
+            channel: selectedMethod,
+          }).catch((err) => console.warn('Supabase saveOrder error:', err));
+
+          saveTransactionToSupabase({
+            id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            userId: activeUserId,
+            type: 'incoming_escrow',
+            title: `Payment: ${item.title.substring(0, 32)}`,
+            amount: itemPrice,
+            date: 'Just now',
+            status: 'completed',
+            referenceCode: code,
+            channel: selectedMethod,
+            counterpartName: item.sellerName,
+            notes: `Handover at ${item.safeMeetupSpot}`,
+          }, activeUserId).catch((err) => console.warn('Supabase saveTransaction error:', err));
+        });
       }
     }, 1000);
   };

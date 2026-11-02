@@ -131,6 +131,7 @@ export default function ProfileScreen() {
   const [tempSpot, setTempSpot] = useState(preferredSpot);
 
   // Student Profile Identity State - Clean Slate for new accounts
+  const [profileId, setProfileId] = useState<string>('user_active_student');
   const [profileName, setProfileName] = useState('New Student');
   const [profileDegree, setProfileDegree] = useState('Select Degree Program');
   const [profileYearLevel, setProfileYearLevel] = useState('1st Year');
@@ -152,10 +153,15 @@ export default function ProfileScreen() {
 
     async function loadActiveProfile() {
       try {
+        let activeUserId = 'user_active_student';
         // 1. Check locally saved student profile
         const local = await AsyncStorage.getItem('@campusgreen_user_profile');
         if (local && isMounted) {
           const parsed = JSON.parse(local);
+          if (parsed.id) {
+            activeUserId = parsed.id;
+            setProfileId(parsed.id);
+          }
           if (parsed.fullName) {
             setProfileName(parsed.fullName);
             setTempProfileName(parsed.fullName);
@@ -179,7 +185,7 @@ export default function ProfileScreen() {
         }
 
         // 2. Fetch from Supabase
-        const p = await fetchProfileFromSupabase('user_active_student');
+        const p = await fetchProfileFromSupabase(activeUserId);
         if (p && isMounted) {
           setProfileName(p.fullName);
           setProfileDegree(p.degreeProgram);
@@ -198,7 +204,7 @@ export default function ProfileScreen() {
         }
 
         // 3. Load user orders from Supabase
-        const orders = await fetchOrdersFromSupabase('user_active_student');
+        const orders = await fetchOrdersFromSupabase(activeUserId);
         if (orders && isMounted) {
           setStudentPurchases(orders);
         }
@@ -460,7 +466,7 @@ export default function ProfileScreen() {
       setTimeout(() => setActionFeedback(null), 3000);
 
       saveProfileToSupabase({
-        id: 'user_active_student',
+        id: profileId,
         fullName: profileName,
         degreeProgram: profileDegree,
         yearLevel: profileYearLevel,
@@ -544,20 +550,22 @@ export default function ProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const pickedUri = result.assets[0].uri;
+        const pickedAsset = result.assets[0];
+        const pickedUri = pickedAsset.uri;
         setProfileAvatarUri(pickedUri);
         setTempAvatarUri(pickedUri);
         setActionFeedback('Uploading photo to Supabase...');
 
-        const publicUrl = await uploadImageToSupabase(pickedUri, 'avatars');
+        const publicUrl = await uploadImageToSupabase(pickedUri, 'avatars', pickedAsset.base64);
         setProfileAvatarUri(publicUrl);
         setTempAvatarUri(publicUrl);
 
         saveProfileToSupabase({
-          id: 'user_active_student',
+          id: profileId,
           fullName: profileName,
           degreeProgram: profileDegree,
           yearLevel: profileYearLevel,
@@ -592,12 +600,30 @@ export default function ProfileScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        const capturedUri = result.assets[0].uri;
+        const capturedAsset = result.assets[0];
+        const capturedUri = capturedAsset.uri;
         setProfileAvatarUri(capturedUri);
         setTempAvatarUri(capturedUri);
+        setActionFeedback('Uploading photo to Supabase...');
+
+        const publicUrl = await uploadImageToSupabase(capturedUri, 'avatars', capturedAsset.base64);
+        setProfileAvatarUri(publicUrl);
+        setTempAvatarUri(publicUrl);
+
+        saveProfileToSupabase({
+          id: profileId,
+          fullName: profileName,
+          degreeProgram: profileDegree,
+          yearLevel: profileYearLevel,
+          campus: 'Ateneo de Naga University',
+          avatarUrl: publicUrl,
+          preferredMeetupSpot: preferredSpot,
+        }).catch((err) => console.warn('Supabase save profile photo error:', err));
+
         setActionFeedback('Profile photo updated.');
         setTimeout(() => setActionFeedback(null), 3000);
       }
@@ -644,7 +670,7 @@ export default function ProfileScreen() {
     setTimeout(() => setActionFeedback(null), 3000);
 
     saveProfileToSupabase({
-      id: 'user_active_student',
+      id: profileId,
       fullName: updatedName,
       degreeProgram: updatedDegree,
       yearLevel: updatedYear,
@@ -656,6 +682,7 @@ export default function ProfileScreen() {
     AsyncStorage.setItem(
       '@campusgreen_user_profile',
       JSON.stringify({
+        id: profileId,
         fullName: updatedName,
         degreeProgram: updatedDegree,
         yearLevel: updatedYear,

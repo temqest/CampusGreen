@@ -39,6 +39,7 @@ export interface MarketplaceItem {
   yearLevel?: string; // e.g., '2nd Year', 'Graduating'
   campus: string; // e.g., 'Ateneo de Naga University', 'Univ. of Nueva Caceres'
   safeMeetupSpot: string; // e.g., 'Main Library Ground Floor', 'Gate 1 Security Post'
+  sellerId?: string;
   sellerName: string;
   sellerRating: number;
   sellerYear: string;
@@ -55,6 +56,7 @@ export interface MarketplaceItem {
   imageUrl?: string;
   photos?: ItemPhoto[];
   description: string;
+  swapWishlist?: string;
   estimatedCo2SavedKg: number;
 }
 

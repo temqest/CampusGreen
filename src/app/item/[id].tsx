@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   FlatList,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -10,8 +11,10 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -37,6 +40,28 @@ export default function ItemDetailScreen() {
 
   const item = items.find((i) => i.id === id) || items[0];
   const inBasket = item ? isInBasket(item.id) : false;
+
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [currentUserName, setCurrentUserName] = useState('');
+  const [swapModalVisible, setSwapModalVisible] = useState(false);
+  const [offeredTradeItem, setOfferedTradeItem] = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+      if (str) {
+        try {
+          const parsed = JSON.parse(str);
+          if (parsed.id) setCurrentUserId(parsed.id);
+          if (parsed.fullName) setCurrentUserName(parsed.fullName.trim().toLowerCase());
+        } catch {}
+      }
+    });
+  }, []);
+
+  const isOwner =
+    (!!currentUserId && item.sellerId === currentUserId) ||
+    (item as any).isOwner === true ||
+    (!!currentUserName && item.sellerName.trim().toLowerCase() === currentUserName);
   const photos: ItemPhoto[] =
     item.photos && item.photos.length > 0
       ? item.photos
@@ -558,7 +583,28 @@ export default function ItemDetailScreen() {
             paddingBottom: Math.max(insets.bottom, 12),
           },
         ]}>
-        {item.tradeType === 'buy' && item.price !== null && item.price > 0 ? (
+        {isOwner ? (
+          <View
+            style={[
+              styles.ownerBannerContainer,
+              {
+                backgroundColor: theme.surfaceSubtle,
+                borderColor: theme.border,
+              },
+            ]}>
+            <View style={styles.ownerBannerIconBox}>
+              <Ionicons name="person-circle-outline" size={22} color={theme.primary} />
+            </View>
+            <View style={styles.ownerBannerTextBox}>
+              <Text style={[styles.ownerBannerTitle, { color: theme.text }]}>
+                Your Listing
+              </Text>
+              <Text style={[styles.ownerBannerSubtitle, { color: theme.textSecondary }]}>
+                You listed this item. Manage it or see status in your Profile tab.
+              </Text>
+            </View>
+          </View>
+        ) : item.tradeType === 'buy' && item.price !== null && item.price > 0 ? (
           <View style={styles.dockRow}>
             <Pressable
               accessibilityRole="button"
@@ -597,12 +643,13 @@ export default function ItemDetailScreen() {
                   opacity: pressed ? 0.75 : 1,
                 },
               ]}
-              onPress={() =>
+              onPress={() => {
+                ensureConversation(item);
                 router.push({
                   pathname: '/chat/[id]',
                   params: { id: item.id },
-                })
-              }>
+                });
+              }}>
               <Ionicons
                 name="chatbubbles-outline"
                 size={20}
@@ -621,24 +668,23 @@ export default function ItemDetailScreen() {
                   opacity: pressed ? 0.88 : 1,
                 },
               ]}
-              onPress={() =>
+              onPress={() => {
+                ensureConversation(item);
                 router.push({
                   pathname: '/payment/[id]',
                   params: { id: item.id },
-                })
-              }>
+                });
+              }}>
               <Ionicons name="card-outline" size={18} color="#FFFFFF" />
               <Text style={styles.primaryCtaText}>
                 Pay Now • ₱{item.price}
               </Text>
             </Pressable>
           </View>
-        ) : (
+        ) : item.tradeType === 'swap' ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={
-              item.tradeType === 'swap' ? 'Propose swap trade' : 'Request freebie'
-            }
+            accessibilityLabel="Propose swap trade"
             style={({ pressed }) => [
               styles.primaryCta,
               {
@@ -646,21 +692,149 @@ export default function ItemDetailScreen() {
                 opacity: pressed ? 0.88 : 1,
               },
             ]}
-            onPress={() =>
+            onPress={() => setSwapModalVisible(true)}>
+            <Ionicons name="repeat" size={18} color="#FFFFFF" />
+            <Text style={styles.primaryCtaText}>Propose Swap Trade</Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Request freebie"
+            style={({ pressed }) => [
+              styles.primaryCta,
+              {
+                backgroundColor: theme.primary,
+                opacity: pressed ? 0.88 : 1,
+              },
+            ]}
+            onPress={() => {
+              ensureConversation(item);
               router.push({
                 pathname: '/chat/[id]',
                 params: { id: item.id },
-              })
-            }>
+              });
+            }}>
             <Ionicons name="chatbubbles-outline" size={18} color="#FFFFFF" />
-            <Text style={styles.primaryCtaText}>
-              {item.tradeType === 'swap'
-                ? 'Propose Swap Trade'
-                : 'Request Freebie'}
-            </Text>
+            <Text style={styles.primaryCtaText}>Request Freebie</Text>
           </Pressable>
         )}
       </View>
+
+      {/* Swap Proposal Modal (Requester specifies what to trade) */}
+      <Modal
+        visible={swapModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSwapModalVisible(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setSwapModalVisible(false)}>
+          <Pressable
+            style={[
+              styles.swapModalSheet,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+                paddingBottom: Math.max(insets.bottom, 20),
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}>
+            <View style={styles.modalHandle} />
+
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalTitleGroup}>
+                <Text style={[styles.modalTitle, { color: theme.text }]}>
+                  Propose Swap Trade
+                </Text>
+                <Text style={[styles.modalSubtitle, { color: theme.textSecondary }]}>
+                  Offer gear in exchange for &quot;{item.title}&quot;
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close swap proposal"
+                onPress={() => setSwapModalVisible(false)}
+                hitSlop={8}
+                style={[styles.closeIconBtn, { backgroundColor: theme.surfaceSubtle }]}>
+                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            <View style={styles.swapInputSection}>
+              <Text style={[styles.inputSectionLabel, { color: theme.text }]}>
+                What item are you offering to trade?
+              </Text>
+              <TextInput
+                accessibilityLabel="Item you are offering in trade"
+                placeholder="e.g. Casio fx-991EX Calculator, Study Lamp, Lab Coat"
+                placeholderTextColor={theme.textMuted}
+                value={offeredTradeItem}
+                onChangeText={setOfferedTradeItem}
+                style={[
+                  styles.swapTextInput,
+                  {
+                    backgroundColor: theme.surfaceSubtle,
+                    borderColor: theme.border,
+                    color: theme.text,
+                  },
+                ]}
+              />
+
+              <View
+                style={[
+                  styles.swapPromptBox,
+                  {
+                    backgroundColor: theme.blueBg,
+                    borderColor: theme.borderSubtle,
+                  },
+                ]}>
+                <Ionicons name="information-circle-outline" size={18} color={theme.blue} />
+                <Text style={[styles.swapPromptText, { color: theme.blue }]}>
+                  Your offered item will be sent to {item.sellerName} and displayed in the campus handover pass.
+                </Text>
+              </View>
+            </View>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Confirm and send trade offer"
+              disabled={!offeredTradeItem.trim()}
+              style={({ pressed }) => [
+                styles.confirmTradeBtn,
+                {
+                  backgroundColor: offeredTradeItem.trim() ? theme.primary : theme.surfaceSubtle,
+                  opacity: pressed ? 0.88 : 1,
+                },
+              ]}
+              onPress={() => {
+                const offered = offeredTradeItem.trim();
+                ensureConversation(item);
+                setSwapModalVisible(false);
+                setOfferedTradeItem('');
+                router.push({
+                  pathname: '/chat/[id]',
+                  params: {
+                    id: item.id,
+                    offeredItem: offered,
+                  },
+                });
+              }}>
+              <Ionicons
+                name="repeat"
+                size={18}
+                color={offeredTradeItem.trim() ? '#FFFFFF' : theme.textMuted}
+              />
+              <Text
+                style={[
+                  styles.confirmTradeBtnText,
+                  { color: offeredTradeItem.trim() ? '#FFFFFF' : theme.textMuted },
+                ]}>
+                Send Trade Proposal
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1079,6 +1253,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     paddingTop: Spacing.three,
   },
+  ownerBannerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: Spacing.three,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    gap: Spacing.three,
+  },
+  ownerBannerIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  ownerBannerTextBox: {
+    flex: 1,
+  },
+  ownerBannerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  ownerBannerSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 16,
+  },
   primaryCta: {
     height: 48,
     borderRadius: Radius.md,
@@ -1107,5 +1308,91 @@ const styles = StyleSheet.create({
   },
   primaryCtaFlex: {
     flex: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  swapModalSheet: {
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.four,
+    paddingTop: Spacing.three,
+  },
+  modalHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: Radius.full,
+    backgroundColor: '#D1D5DB',
+    alignSelf: 'center',
+    marginBottom: Spacing.three,
+  },
+  modalHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.three,
+  },
+  modalTitleGroup: {
+    flex: 1,
+    paddingRight: Spacing.two,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  closeIconBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  swapInputSection: {
+    marginBottom: Spacing.four,
+  },
+  inputSectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: Spacing.two,
+  },
+  swapTextInput: {
+    height: 48,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    fontSize: 14,
+    marginBottom: Spacing.three,
+  },
+  swapPromptBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: Spacing.two,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  swapPromptText: {
+    fontSize: 12,
+    flex: 1,
+    lineHeight: 16,
+  },
+  confirmTradeBtn: {
+    height: 48,
+    borderRadius: Radius.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  confirmTradeBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

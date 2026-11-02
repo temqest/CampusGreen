@@ -443,6 +443,19 @@ This document captures project-specific design standards, user preferences, and 
 - **Proper Session Tear-down on Logout**: Tapping **Log Out** in `profile.tsx` clears `@campusgreen_user_profile` from `AsyncStorage` and calls `supabase.auth.signOut()`, preventing stale profile data from bleeding into subsequent login sessions.
 - **Account-Bound Profile State**: On login, the matched profile is loaded into local storage and synced to the active student session.
 
+### 31. Multi-Student Account Isolation & Cross-Account Data Separation
+- **Unique Student User IDs**:
+  - Never hardcode user identifiers like `'user_active_student'` across the codebase.
+  - Generate deterministic, isolated user IDs for each student account using their email address (e.g. `getStudentUserId(email, fullName)` producing `user_pvillamer_adnu_edu_ph` or `user_john_unc_edu_ph`).
+  - Store this `id` directly within `@campusgreen_user_profile` in `AsyncStorage`.
+- **Dynamic Identity Ownership Checks**:
+  - In `item/[id].tsx`, `chat/[id].tsx`, and `marketplace.tsx`, check listing ownership by comparing `item.sellerId === currentUserId` or comparing normalized lowercase `item.sellerName === currentUserName`.
+  - Prevent students from starting chat purchases, swaps, or transactions with their own items, while allowing other student accounts to freely buy, swap, or chat with them.
+- **Per-Account Chat, Order, and Transaction Scopes**:
+  - Chat conversations, escrow balances, and order histories must load using the active user's unique ID (`activeUserId`) retrieved from storage.
+  - Logging into account B will never display private chats or past purchases belonging to account A.
+
+
 
 
 

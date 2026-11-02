@@ -5,6 +5,7 @@ import React, {
   useEffect,
   useState,
 } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MarketplaceItem } from '@/types/item';
 import {
   fetchChatConversationsFromSupabase,
@@ -61,7 +62,18 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const refreshConversations = useCallback(async () => {
     try {
-      const liveConvs = await fetchChatConversationsFromSupabase('user_active_student');
+      let sellerName = '';
+      let activeUserId = 'user_active_student';
+      try {
+        const stored = await AsyncStorage.getItem('@campusgreen_user_profile');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.fullName) sellerName = parsed.fullName.trim();
+          if (parsed.id) activeUserId = parsed.id;
+        }
+      } catch {}
+
+      const liveConvs = await fetchChatConversationsFromSupabase(activeUserId, sellerName);
       setConversations(liveConvs);
     } catch (err) {
       console.warn('Error refreshing conversations:', err);
@@ -70,7 +82,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
-    fetchChatConversationsFromSupabase('user_active_student')
+
+    AsyncStorage.getItem('@campusgreen_user_profile')
+      .then((stored) => {
+        let sellerName = '';
+        let activeUserId = 'user_active_student';
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed.fullName) sellerName = parsed.fullName.trim();
+            if (parsed.id) activeUserId = parsed.id;
+          } catch {}
+        }
+        return fetchChatConversationsFromSupabase(activeUserId, sellerName);
+      })
       .then((convs) => {
         if (isMounted) setConversations(convs);
       })
@@ -180,9 +205,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       return [newConv, ...prev];
     });
 
-    saveChatConversationToSupabase(newConv).catch((err) =>
-      console.warn('Supabase save auto-generated conversation error:', err)
-    );
+    AsyncStorage.getItem('@campusgreen_user_profile')
+      .then((stored) => {
+        let activeUserId = 'user_active_student';
+        if (stored) {
+          try {
+            const parsed = JSON.parse(stored);
+            if (parsed.id) activeUserId = parsed.id;
+          } catch {}
+        }
+        return saveChatConversationToSupabase(newConv, activeUserId);
+      })
+      .catch((err) =>
+        console.warn('Supabase save auto-generated conversation error:', err)
+      );
 
     return newConv;
   }, []);
@@ -260,98 +296,146 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         return [updatedConv, ...rest];
       });
 
-      // Persist conversation to Supabase
-      saveChatConversationToSupabase(updatedConv).catch((err) =>
-        console.warn('Supabase save conversation error:', err)
-      );
-
-      // 4. Show typing indicator and simulate realistic peer response
-      setIsTypingByItemId((prev) => ({ ...prev, [itemId]: true }));
-
-      setTimeout(() => {
-        setIsTypingByItemId((prev) => ({ ...prev, [itemId]: false }));
-
-        const lower = trimmed.toLowerCase();
-        const spot = itemMeta?.safeMeetupSpot || 'the safe meetup zone';
-        let reply = '';
-
-        if (imageUri) {
-          reply = `Thanks for sending the photo! Looks in great condition. Can we meet at ${spot}?`;
-        } else if (
-          lower.includes('price') ||
-          lower.includes('discount') ||
-          lower.includes('tawad') ||
-          lower.includes('negotiable')
-        ) {
-          reply = `I can give you a student discount of ₱50 off if we can meet today at ${spot}!`;
-        } else if (
-          lower.includes('when') ||
-          lower.includes('where') ||
-          lower.includes('time') ||
-          lower.includes('today') ||
-          lower.includes('tomorrow') ||
-          lower.includes('meet')
-        ) {
-          reply = `Sounds good! I have a class break around 3:00 PM. Can we meet at ${spot}?`;
-        } else if (
-          lower.includes('available') ||
-          lower.includes('avail') ||
-          lower.includes('still')
-        ) {
-          reply = `Yes, it's still available! Would you like to inspect it at ${spot}?`;
-        } else if (
-          lower.includes('thank') ||
-          lower.includes('salamat') ||
-          lower.includes('thanks')
-        ) {
-          reply = `You're welcome! See you at ${spot}.`;
-        } else if (itemMeta?.tradeType === 'swap') {
-          reply = `That sounds like a fair trade! Let's inspect both items together at ${spot}.`;
-        } else if (itemMeta?.tradeType === 'free') {
-          reply = `Awesome! I've reserved it for you. See you at ${spot}!`;
-        } else {
-          reply = `Got it! Thanks for letting me know. Let's meet at ${spot}!`;
-        }
-
-        const peerMsg: Message = {
-          id: `msg-peer-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          sender: 'seller',
-          text: reply,
-          timestamp: 'Just now',
-        };
-
-        setMessagesByItemId((prev) => {
-          const current = prev[itemId] || [];
-          return {
-            ...prev,
-            [itemId]: [...current, peerMsg],
-          };
-        });
-
-        saveChatMessageToSupabase({
-          id: peerMsg.id,
-          itemId,
-          sender: 'seller',
-          text: reply,
-          timestamp: 'Just now',
-        }).catch((err) => console.warn('Supabase save peer message error:', err));
-
-        // Update conversation with peer's reply
-        const replyConv: ChatConversation = {
-          ...updatedConv,
-          lastMessage: reply,
-          timestamp: 'Just now',
-        };
-
-        setConversations((prev) => {
-          const rest = prev.filter((c) => c.itemId !== itemId);
-          return [replyConv, ...rest];
-        });
-
-        saveChatConversationToSupabase(replyConv).catch((err) =>
-          console.warn('Supabase save reply conversation error:', err)
+      // Persist conversation to Supabase with the active user's ID
+      AsyncStorage.getItem('@campusgreen_user_profile')
+        .then((stored) => {
+          let activeUserId = 'user_active_student';
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              if (parsed.id) activeUserId = parsed.id;
+            } catch {}
+          }
+          return saveChatConversationToSupabase(updatedConv, activeUserId);
+        })
+        .catch((err) =>
+          console.warn('Supabase save conversation error:', err)
         );
-      }, 900);
+
+      // 4. Determine if the seller is an actual human user
+      // If the item belongs to an actual user (created via sell tab or has sellerId or matches active profile),
+      // DO NOT auto-reply. Auto-reply is strictly reserved for the automated demo/mock student catalogue.
+      AsyncStorage.getItem('@campusgreen_user_profile')
+        .then((storedProfile) => {
+          let currentUserId = '';
+          let currentUserName = '';
+          if (storedProfile) {
+            try {
+              const parsed = JSON.parse(storedProfile);
+              if (parsed.id) currentUserId = parsed.id;
+              if (parsed.fullName) currentUserName = parsed.fullName.trim().toLowerCase();
+            } catch {}
+          }
+
+          const isUserOwned =
+            (!!currentUserId && itemMeta?.sellerId === currentUserId) ||
+            (!!currentUserName && itemMeta?.sellerName?.trim().toLowerCase() === currentUserName) ||
+            (itemMeta as any)?.isOwner === true;
+
+          if (isUserOwned) {
+            // Own listing - no auto-reply
+            return;
+          }
+
+          // If the item was created by another real student (e.g. ID starts with item_ or sellerId starts with user_),
+          // do NOT auto reply as well! Let the real user respond.
+          const isRealOtherUserListing =
+            itemId.startsWith('item_') ||
+            (!!itemMeta?.sellerId && itemMeta.sellerId.startsWith('user_'));
+
+          if (isRealOtherUserListing) {
+            return;
+          }
+
+          // Show typing indicator and simulate realistic peer response ONLY for mock catalogue items
+          setIsTypingByItemId((prev) => ({ ...prev, [itemId]: true }));
+
+          setTimeout(() => {
+            setIsTypingByItemId((prev) => ({ ...prev, [itemId]: false }));
+
+            const lower = trimmed.toLowerCase();
+            const spot = itemMeta?.safeMeetupSpot || 'the safe meetup zone';
+            let reply = '';
+
+            if (imageUri) {
+              reply = `Thanks for sending the photo! Looks in great condition. Can we meet at ${spot}?`;
+            } else if (
+              lower.includes('price') ||
+              lower.includes('discount') ||
+              lower.includes('tawad') ||
+              lower.includes('negotiable')
+            ) {
+              reply = `I can give you a student discount of ₱50 off if we can meet today at ${spot}!`;
+            } else if (
+              lower.includes('when') ||
+              lower.includes('where') ||
+              lower.includes('time') ||
+              lower.includes('today') ||
+              lower.includes('tomorrow') ||
+              lower.includes('meet')
+            ) {
+              reply = `Sounds good! I have a class break around 3:00 PM. Can we meet at ${spot}?`;
+            } else if (
+              lower.includes('available') ||
+              lower.includes('avail') ||
+              lower.includes('still')
+            ) {
+              reply = `Yes, it's still available! Would you like to inspect it at ${spot}?`;
+            } else if (
+              lower.includes('thank') ||
+              lower.includes('salamat') ||
+              lower.includes('thanks')
+            ) {
+              reply = `You're welcome! See you at ${spot}.`;
+            } else if (itemMeta?.tradeType === 'swap') {
+              reply = `That sounds like a fair trade! Let's inspect both items together at ${spot}.`;
+            } else if (itemMeta?.tradeType === 'free') {
+              reply = `Awesome! I've reserved it for you. See you at ${spot}!`;
+            } else {
+              reply = `Got it! Thanks for letting me know. Let's meet at ${spot}!`;
+            }
+
+            const peerMsg: Message = {
+              id: `msg-peer-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              sender: 'seller',
+              text: reply,
+              timestamp: 'Just now',
+            };
+
+            setMessagesByItemId((prev) => {
+              const current = prev[itemId] || [];
+              return {
+                ...prev,
+                [itemId]: [...current, peerMsg],
+              };
+            });
+
+            saveChatMessageToSupabase({
+              id: peerMsg.id,
+              itemId,
+              sender: 'seller',
+              text: reply,
+              timestamp: 'Just now',
+            }).catch((err) => console.warn('Supabase save peer message error:', err));
+
+            // Update conversation with peer's reply
+            const replyConv: ChatConversation = {
+              ...updatedConv,
+              lastMessage: reply,
+              timestamp: 'Just now',
+            };
+
+            setConversations((prev) => {
+              const rest = prev.filter((c) => c.itemId !== itemId);
+              return [replyConv, ...rest];
+            });
+
+            saveChatConversationToSupabase(replyConv).catch((err) =>
+              console.warn('Supabase save reply conversation error:', err)
+            );
+          }, 900);
+        })
+        .catch(() => {});
     },
     [getMessages]
   );

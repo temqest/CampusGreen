@@ -19,7 +19,7 @@ import { Spacing, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { saveProfileToSupabase } from '@/lib/database';
+import { getStudentUserId, saveProfileToSupabase } from '@/lib/database';
 
 const YEAR_LEVELS = [
   { id: '1', label: '1st Year' },
@@ -153,8 +153,10 @@ export default function OnboardingScreen() {
       const degree = (selectedDegreeObj ? selectedDegreeObj.name : (customCourse.trim() || 'BS Tourism Management'));
       const year = YEAR_LEVELS.find((y) => y.id === selectedYear)?.label || '1st Year';
 
+      const uniqueUserId = getStudentUserId(studentEmail, studentName);
+
       const profilePayload = {
-        id: 'user_active_student',
+        id: uniqueUserId,
         email: studentEmail,
         fullName: studentName,
         degreeProgram: degree,

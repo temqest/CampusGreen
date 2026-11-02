@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,10 +25,31 @@ export function ItemCard({ item }: ItemCardProps) {
   const { addToBasket, removeFromBasket, isInBasket } = useBasket();
   const { ensureConversation } = useChat();
 
+  const [currentUserId, setCurrentUserId] = useState('');
+  const [currentUserName, setCurrentUserName] = useState('');
+
+  useEffect(() => {
+    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+      if (str) {
+        try {
+          const parsed = JSON.parse(str);
+          if (parsed.id) setCurrentUserId(parsed.id);
+          if (parsed.fullName) setCurrentUserName(parsed.fullName.trim().toLowerCase());
+        } catch {}
+      }
+    });
+  }, []);
+
+  const isOwner =
+    (!!currentUserId && item.sellerId === currentUserId) ||
+    (item as any).isOwner === true ||
+    (!!currentUserName && item.sellerName.trim().toLowerCase() === currentUserName);
+
   const inBasket = isInBasket(item.id);
 
   const handleBasketToggle = async (e: any) => {
     e?.stopPropagation?.();
+    if (isOwner) return; // Disallow adding own listing to basket
     if (inBasket) {
       await removeFromBasket(item.id);
     } else {
@@ -222,32 +244,56 @@ export function ItemCard({ item }: ItemCardProps) {
           </View>
 
           {item.tradeType === 'buy' && (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={inBasket ? 'In Basket' : 'Add to Basket'}
-              hitSlop={6}
-              onPress={handleBasketToggle}
-              style={({ pressed }) => [
-                styles.quickBasketBtn,
-                {
-                  backgroundColor: inBasket ? theme.primary : theme.surfaceSubtle,
-                  borderColor: inBasket ? theme.primary : theme.border,
-                  opacity: pressed ? 0.75 : 1,
-                },
-              ]}>
-              <Ionicons
-                name={inBasket ? 'basket' : 'basket-outline'}
-                size={13}
-                color={inBasket ? '#FFFFFF' : theme.primary}
-              />
-              <Text
+            isOwner ? (
+              <View
                 style={[
-                  styles.quickBasketText,
-                  { color: inBasket ? '#FFFFFF' : theme.primary },
+                  styles.quickBasketBtn,
+                  {
+                    backgroundColor: theme.surfaceSubtle,
+                    borderColor: theme.borderSubtle,
+                  },
                 ]}>
-                {inBasket ? 'In Basket' : '+ Basket'}
-              </Text>
-            </Pressable>
+                <Ionicons
+                  name="person-outline"
+                  size={12}
+                  color={theme.textMuted}
+                />
+                <Text
+                  style={[
+                    styles.quickBasketText,
+                    { color: theme.textMuted },
+                  ]}>
+                  Your Item
+                </Text>
+              </View>
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={inBasket ? 'In Basket' : 'Add to Basket'}
+                hitSlop={6}
+                onPress={handleBasketToggle}
+                style={({ pressed }) => [
+                  styles.quickBasketBtn,
+                  {
+                    backgroundColor: inBasket ? theme.primary : theme.surfaceSubtle,
+                    borderColor: inBasket ? theme.primary : theme.border,
+                    opacity: pressed ? 0.75 : 1,
+                  },
+                ]}>
+                <Ionicons
+                  name={inBasket ? 'basket' : 'basket-outline'}
+                  size={13}
+                  color={inBasket ? '#FFFFFF' : theme.primary}
+                />
+                <Text
+                  style={[
+                    styles.quickBasketText,
+                    { color: inBasket ? '#FFFFFF' : theme.primary },
+                  ]}>
+                  {inBasket ? 'In Basket' : '+ Basket'}
+                </Text>
+              </Pressable>
+            )
           )}
         </View>
       </View>

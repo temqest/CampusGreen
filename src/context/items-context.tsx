@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EscrowTransaction, MarketplaceItem, SellerSubscriptionState, WalletState } from '@/types/item';
 import { INITIAL_SUBSCRIPTION_STATE, MOCK_ITEMS } from '@/data/mock-items';
 import {
@@ -102,7 +103,17 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       });
 
     // Load Escrow Wallet transactions from Supabase
-    fetchTransactionsFromSupabase('user_active_student')
+    AsyncStorage.getItem('@campusgreen_user_profile')
+      .then((str) => {
+        let activeUserId = 'user_active_student';
+        if (str) {
+          try {
+            const parsed = JSON.parse(str);
+            if (parsed.id) activeUserId = parsed.id;
+          } catch {}
+        }
+        return fetchTransactionsFromSupabase(activeUserId);
+      })
       .then((txs) => {
         if (isMounted && txs && txs.length > 0) {
           let avail = 0;

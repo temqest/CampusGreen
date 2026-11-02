@@ -19,7 +19,7 @@ import { Spacing, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fetchProfileByEmailFromSupabase, saveProfileToSupabase } from '@/lib/database';
+import { fetchProfileByEmailFromSupabase, getStudentUserId, saveProfileToSupabase } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
@@ -75,9 +75,10 @@ export default function LoginScreen() {
         return;
       }
 
-      // 3. User is valid: Set active profile payload into local session
+      // 3. User is valid: Set active profile payload with unique student ID
+      const computedUserId = matchedProfile?.id || authData?.user?.id || getStudentUserId(trimmedEmail);
       const activePayload = matchedProfile || {
-        id: 'user_active_student',
+        id: computedUserId,
         email: trimmedEmail,
         fullName: authData?.user?.user_metadata?.full_name || 'Campus Student',
         degreeProgram: 'BS Tourism Management',
@@ -86,16 +87,16 @@ export default function LoginScreen() {
         preferredMeetupSpot: 'Main Library Ground Floor',
       };
 
-      // Always sync the user profile locally and ensure active student ID is updated
+      // Always sync the user profile locally with their unique student ID
       await AsyncStorage.setItem(
         '@campusgreen_user_profile',
-        JSON.stringify({ ...activePayload, id: 'user_active_student' })
+        JSON.stringify({ ...activePayload, id: computedUserId })
       );
 
-      // Upsert into Supabase for 'user_active_student'
+      // Upsert into Supabase for this unique student account
       await saveProfileToSupabase({
         ...activePayload,
-        id: 'user_active_student',
+        id: computedUserId,
       });
 
       setIsLoading(false);

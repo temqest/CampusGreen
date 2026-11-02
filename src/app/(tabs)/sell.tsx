@@ -222,7 +222,7 @@ export default function SellScreen() {
       const uploadedPhotos: ItemPhoto[] = [];
       for (let i = 0; i < photos.length; i++) {
         const p = photos[i];
-        const publicUrl = await uploadImageToSupabase(p.uri, 'listings');
+        const publicUrl = await uploadImageToSupabase(p.uri, 'listings', p.base64);
         uploadedPhotos.push({
           id: p.id,
           label: p.label || (i === 0 ? 'Main View' : `Angle ${i + 1}`),
@@ -235,12 +235,14 @@ export default function SellScreen() {
 
       let activeSellerName = 'Student Seller';
       let activeSellerYear = 'Verified Student';
+      let activeSellerId = 'user_active_student';
       try {
         const local = await AsyncStorage.getItem('@campusgreen_user_profile');
         if (local) {
           const parsed = JSON.parse(local);
           if (parsed.fullName) activeSellerName = parsed.fullName;
           if (parsed.yearLevel) activeSellerYear = parsed.yearLevel;
+          if (parsed.id) activeSellerId = parsed.id;
         }
       } catch {}
 
@@ -255,6 +257,7 @@ export default function SellScreen() {
         yearLevel: yearLevel || undefined,
         campus,
         safeMeetupSpot: safeMeetupSpot.trim(),
+        sellerId: activeSellerId,
         sellerName: activeSellerName,
         sellerRating: 5.0,
         sellerYear: activeSellerYear,

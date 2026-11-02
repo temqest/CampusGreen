@@ -13,6 +13,22 @@ export interface UserProfile {
 }
 
 /**
+ * Returns a deterministic, clean user ID string from an email or username
+ * e.g. "student@adnu.edu.ph" -> "user_student_adnu_edu_ph"
+ */
+export function getStudentUserId(email?: string | null, fallbackName?: string | null): string {
+  if (email && email.trim()) {
+    const sanitized = email.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return `user_${sanitized}`;
+  }
+  if (fallbackName && fallbackName.trim() && fallbackName.trim().toLowerCase() !== 'new student') {
+    const sanitized = fallbackName.trim().toLowerCase().replace(/[^a-z0-9]/g, '_');
+    return `user_${sanitized}`;
+  }
+  return 'user_active_student';
+}
+
+/**
  * Formats a student name to prevent layout and spacing conflicts:
  * e.g., "Maria Clara Santos" -> "Maria S."
  *       "Jerome Tan" -> "Jerome T."
@@ -46,6 +62,7 @@ export function mapDbToItem(row: any): MarketplaceItem {
     yearLevel: row.year_level || row.yearLevel || undefined,
     campus: row.campus || 'Ateneo de Naga University',
     safeMeetupSpot: row.safe_meetup_spot || row.safeMeetupSpot || 'Main Library Ground Floor',
+    sellerId: row.seller_id || row.sellerId || undefined,
     sellerName: row.seller_name || row.sellerName || 'Campus Student',
     sellerRating: Number(row.seller_rating ?? row.sellerRating ?? 5.0),
     sellerYear: row.seller_year || row.sellerYear || 'Verified Student',
@@ -79,6 +96,7 @@ export function mapItemToDb(item: MarketplaceItem): any {
     year_level: item.yearLevel || null,
     campus: item.campus,
     safe_meetup_spot: item.safeMeetupSpot,
+    seller_id: item.sellerId || (item as any).isOwner ? (item.sellerId || 'user_active_student') : null,
     seller_name: item.sellerName,
     seller_rating: item.sellerRating,
     seller_year: item.sellerYear,
@@ -245,12 +263,20 @@ export async function saveProfileToSupabase(profile: UserProfile): Promise<void>
 
 // ======================== CHAT API ========================
 
-export async function fetchChatConversationsFromSupabase(userId: string = 'user_active_student') {
-  const { data, error } = await supabase
-    .from('chat_conversations')
-    .select('*')
-    .eq('user_id', userId)
-    .order('updated_at', { ascending: false });
+export async function fetchChatConversationsFromSupabase(
+  userId: string = 'user_active_student',
+  sellerName?: string
+) {
+  let query = supabase.from('chat_conversations').select('*');
+
+  if (sellerName) {
+    // If a seller name is provided, return conversations where the user is buyer OR seller
+    query = query.or(`user_id.eq.${userId},seller_name.ilike.%${sellerName}%`);
+  } else {
+    query = query.eq('user_id', userId);
+  }
+
+  const { data, error } = await query.order('updated_at', { ascending: false });
 
   if (error) {
     console.warn('Error fetching chat conversations from Supabase:', error.message);

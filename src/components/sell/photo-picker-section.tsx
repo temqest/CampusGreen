@@ -19,6 +19,7 @@ export interface UploadedPhoto {
   id: string;
   uri: string;
   label?: string;
+  base64?: string | null;
 }
 
 interface PhotoPickerSectionProps {
@@ -84,12 +85,14 @@ export function PhotoPickerSection({
         allowsMultipleSelection: true,
         selectionLimit: remainingSlots,
         quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const newPhotos: UploadedPhoto[] = result.assets.map((asset, index) => ({
           id: getNextId('gallery'),
           uri: asset.uri,
+          base64: asset.base64,
           label: photos.length === 0 && index === 0 ? 'Cover Photo' : `Angle ${photos.length + index + 1}`,
         }));
         onPhotosChange([...photos, ...newPhotos].slice(0, maxPhotos));
@@ -115,6 +118,7 @@ export function PhotoPickerSection({
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -122,6 +126,7 @@ export function PhotoPickerSection({
         const newPhoto: UploadedPhoto = {
           id: getNextId('camera'),
           uri: asset.uri,
+          base64: asset.base64,
           label: photos.length === 0 ? 'Cover Photo' : `Photo ${photos.length + 1}`,
         };
         onPhotosChange([...photos, newPhoto].slice(0, maxPhotos));

@@ -1,5 +1,6 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   KeyboardAvoidingView,
@@ -11,6 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -21,6 +23,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useItems } from '@/context/items-context';
 import { Message, useChat } from '@/context/chat-context';
 import { MarketplaceItem } from '@/types/item';
+import { uploadImageToSupabase } from '@/lib/supabase';
 
 type AgreementStatus = 'pending' | 'accepted' | 'completed';
 
@@ -41,12 +44,17 @@ const RATING_TAG_OPTIONS = [
 ];
 
 export default function ChatScreen() {
-  const { id, sellerName: paramSellerName, itemTitle: paramItemTitle } =
-    useLocalSearchParams<{
-      id: string;
-      sellerName?: string;
-      itemTitle?: string;
-    }>();
+  const {
+    id,
+    sellerName: paramSellerName,
+    itemTitle: paramItemTitle,
+    offeredItem: paramOfferedItem,
+  } = useLocalSearchParams<{
+    id: string;
+    sellerName?: string;
+    itemTitle?: string;
+    offeredItem?: string;
+  }>();
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -58,14 +66,19 @@ export default function ChatScreen() {
   const { items, getItemById } = useItems();
 
   const foundItem = getItemById(id) || items.find((i) => i.id === id);
-  const item = foundItem || ({
-    id,
-    sellerName: paramSellerName || 'Campus Student',
-    title: paramItemTitle || 'Marketplace Item',
-    tradeType: 'buy',
-    safeMeetupSpot: 'Main Library Ground Floor',
-    price: null,
-  } as unknown as MarketplaceItem);
+  const item = useMemo(
+    () =>
+      foundItem ||
+      ({
+        id,
+        sellerName: paramSellerName || 'Campus Student',
+        title: paramItemTitle || 'Marketplace Item',
+        tradeType: 'buy',
+        safeMeetupSpot: 'Main Library Ground Floor',
+        price: null,
+      } as unknown as MarketplaceItem),
+    [foundItem, id, paramSellerName, paramItemTitle]
+  );
   const sellerDisplayName = paramSellerName || item.sellerName;
   const itemDisplayName = paramItemTitle || item.title;
 
@@ -73,15 +86,50 @@ export default function ChatScreen() {
   const isFree = item.tradeType === 'free';
   const isBuy = item.tradeType === 'buy';
 
+  // Guard: Owner attempting to chat on their own item
+  useEffect(() => {
+    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+      let currentUserName = '';
+      let currentUserId = '';
+      if (str) {
+        try {
+          const parsed = JSON.parse(str);
+          if (parsed.id) currentUserId = parsed.id;
+          if (parsed.fullName) currentUserName = parsed.fullName.trim().toLowerCase();
+        } catch {}
+      }
+
+      const isOwner =
+        (!!currentUserId && item.sellerId === currentUserId) ||
+        (item as any).isOwner === true ||
+        (!!currentUserName && item.sellerName.trim().toLowerCase() === currentUserName);
+
+      if (isOwner) {
+        Alert.alert(
+          'Your Own Listing',
+          'You cannot start a purchase or swap chat with yourself.',
+          [{ text: 'Go Back', onPress: () => router.back() }]
+        );
+      }
+    });
+  }, [item, router]);
+
   const messages = getMessages(id, item);
   const isTyping = isTypingByItemId[id] || false;
 
   // Interactive Agreement State
   const [agreementStatus, setAgreementStatus] =
     useState<AgreementStatus>('pending');
+  const [exchangeItemName, setExchangeItemName] = useState<string>(
+    paramOfferedItem || 'Desk Study Lamp'
+  );
+  const [isEditingTradeItem, setIsEditingTradeItem] = useState(false);
+  const [editTradeItemInput, setEditTradeItemInput] = useState('');
 
   const [inputMessage, setInputMessage] = useState('');
   const [pendingImageUri, setPendingImageUri] = useState<string | null>(null);
+  const [pendingImageBase64, setPendingImageBase64] = useState<string | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
@@ -143,10 +191,12 @@ export default function ChatScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets[0]?.uri) {
         setPendingImageUri(result.assets[0].uri);
+        setPendingImageBase64(result.assets[0].base64 || null);
       }
     } catch {
       Alert.alert('Error', 'Unable to open photo library. Please try again.');
@@ -168,30 +218,51 @@ export default function ChatScreen() {
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ['images'],
         quality: 0.85,
+        base64: true,
       });
 
       if (!result.canceled && result.assets && result.assets[0]?.uri) {
         setPendingImageUri(result.assets[0].uri);
+        setPendingImageBase64(result.assets[0].base64 || null);
       }
     } catch {
       Alert.alert('Error', 'Unable to launch camera. Please try again.');
     }
   };
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     const text = inputMessage.trim();
     if (!text && !pendingImageUri) return;
+
+    let finalImageUri: string | undefined;
+
+    if (pendingImageUri) {
+      setIsUploadingPhoto(true);
+      try {
+        finalImageUri = await uploadImageToSupabase(
+          pendingImageUri,
+          'chat',
+          pendingImageBase64
+        );
+      } catch (err) {
+        console.warn('Failed to upload chat image to Supabase:', err);
+        finalImageUri = pendingImageUri; // fallback
+      } finally {
+        setIsUploadingPhoto(false);
+      }
+    }
 
     sendMessage(
       id,
       {
         text: text || undefined,
-        imageUri: pendingImageUri || undefined,
+        imageUri: finalImageUri,
       },
       item
     );
     setInputMessage('');
     setPendingImageUri(null);
+    setPendingImageBase64(null);
     setTimeout(() => {
       scrollToBottom(true);
     }, 50);
@@ -204,7 +275,7 @@ export default function ChatScreen() {
     setAgreementStatus('accepted');
 
     const confirmationText = isSwap
-      ? `🤝 Swap Trade Agreement Confirmed! Both students agreed to trade "${itemDisplayName}" for "Desk Study Lamp". Campus Handover Pass #SWAP-8492 generated.`
+      ? `🤝 Swap Trade Agreement Confirmed! Both students agreed to trade "${itemDisplayName}" for "${exchangeItemName}". Campus Handover Pass #SWAP-8492 generated.`
       : isFree
       ? `🎁 Freebie Handover Confirmed! "${itemDisplayName}" is reserved for pickup at ${item.safeMeetupSpot}. Campus Pickup Pass #FREE-3201 generated.`
       : `🤝 Meetup Arranged! "${itemDisplayName}" reserved for pickup at ${item.safeMeetupSpot}. Campus Handover Pass #BUY-5120 generated.`;
@@ -635,9 +706,27 @@ export default function ChatScreen() {
                       ]}>
                       In Exchange:
                     </Text>
-                    <Text style={[styles.detailValue, { color: theme.text }]}>
-                      Desk Study Lamp
-                    </Text>
+                    <View style={styles.exchangeItemRow}>
+                      <Text style={[styles.detailValue, { color: theme.text }]}>
+                        {exchangeItemName}
+                      </Text>
+                      {agreementStatus === 'pending' && (
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel="Change offered trade item"
+                          hitSlop={8}
+                          onPress={() => {
+                            setEditTradeItemInput(exchangeItemName);
+                            setIsEditingTradeItem(true);
+                          }}
+                          style={styles.changeTradeBtn}>
+                          <Ionicons name="pencil" size={13} color={theme.primary} />
+                          <Text style={[styles.changeTradeBtnText, { color: theme.primary }]}>
+                            Edit
+                          </Text>
+                        </Pressable>
+                      )}
+                    </View>
                   </View>
                 )}
 
@@ -1064,27 +1153,31 @@ export default function ChatScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Send message"
-            disabled={!inputMessage.trim() && !pendingImageUri}
+            disabled={(!inputMessage.trim() && !pendingImageUri) || isUploadingPhoto}
             style={({ pressed }) => [
               styles.sendButton,
               {
                 backgroundColor:
-                  inputMessage.trim() || pendingImageUri
+                  (inputMessage.trim() || pendingImageUri) && !isUploadingPhoto
                     ? theme.primary
                     : theme.surfaceSubtle,
                 opacity: pressed ? 0.8 : 1,
               },
             ]}
             onPress={handleSendMessage}>
-            <Ionicons
-              name="send"
-              size={17}
-              color={
-                inputMessage.trim() || pendingImageUri
-                  ? '#FFFFFF'
-                  : theme.textMuted
-              }
-            />
+            {isUploadingPhoto ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Ionicons
+                name="send"
+                size={17}
+                color={
+                  inputMessage.trim() || pendingImageUri
+                    ? '#FFFFFF'
+                    : theme.textMuted
+                }
+              />
+            )}
           </Pressable>
         </View>
       </View>
@@ -1393,6 +1486,103 @@ export default function ChatScreen() {
                     { color: theme.textSecondary },
                   ]}>
                   Maybe Later
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Edit Trade Offer Modal */}
+      <Modal
+        visible={isEditingTradeItem}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIsEditingTradeItem(false)}>
+        <Pressable
+          style={styles.ratingOverlay}
+          onPress={() => setIsEditingTradeItem(false)}>
+          <Pressable
+            style={[
+              styles.editTradeCard,
+              {
+                backgroundColor: theme.surface,
+                borderColor: theme.border,
+              },
+            ]}
+            onPress={(e) => e.stopPropagation()}>
+            <View style={styles.editTradeHeader}>
+              <View
+                style={[
+                  styles.editTradeIconBox,
+                  { backgroundColor: theme.surfaceSubtle },
+                ]}>
+                <Ionicons name="repeat" size={20} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.editTradeTitle, { color: theme.text }]}>
+                  Your Trade Offer
+                </Text>
+                <Text style={[styles.editTradeSubtitle, { color: theme.textSecondary }]}>
+                  Specify the gear you are offering to swap
+                </Text>
+              </View>
+            </View>
+
+            <TextInput
+              accessibilityLabel="Edit trade item input"
+              placeholder="e.g. Casio fx-991EX Calculator, Desk Study Lamp"
+              placeholderTextColor={theme.textMuted}
+              value={editTradeItemInput}
+              onChangeText={setEditTradeItemInput}
+              style={[
+                styles.editTradeTextInput,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderColor: theme.border,
+                  color: theme.text,
+                },
+              ]}
+              autoFocus
+            />
+
+            <View style={styles.editTradeActionsRow}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel editing trade item"
+                style={[styles.editTradeCancelBtn, { borderColor: theme.border }]}
+                onPress={() => setIsEditingTradeItem(false)}>
+                <Text style={[styles.editTradeCancelText, { color: theme.text }]}>
+                  Cancel
+                </Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save updated trade offer"
+                disabled={!editTradeItemInput.trim()}
+                style={[
+                  styles.editTradeSaveBtn,
+                  {
+                    backgroundColor: editTradeItemInput.trim() ? theme.primary : theme.surfaceSubtle,
+                  },
+                ]}
+                onPress={() => {
+                  const updated = editTradeItemInput.trim();
+                  if (updated) {
+                    setExchangeItemName(updated);
+                    setIsEditingTradeItem(false);
+                    addSystemMessage(
+                      id,
+                      `🔄 Updated trade offer: Student proposed to trade "${updated}" for "${itemDisplayName}".`
+                    );
+                  }
+                }}>
+                <Text
+                  style={[
+                    styles.editTradeSaveText,
+                    { color: editTradeItemInput.trim() ? '#FFFFFF' : theme.textMuted },
+                  ]}>
+                  Update Offer
                 </Text>
               </Pressable>
             </View>
@@ -1986,5 +2176,90 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#92400E',
+  },
+  exchangeItemRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+  },
+  changeTradeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+  },
+  changeTradeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  editTradeCard: {
+    width: '90%',
+    maxWidth: 400,
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    padding: Spacing.four,
+    gap: Spacing.three,
+  },
+  editTradeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+  },
+  editTradeIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editTradeTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  editTradeSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  editTradeTextInput: {
+    height: 46,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.three,
+    fontSize: 14,
+  },
+  editTradeActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: Spacing.two,
+    marginTop: Spacing.one,
+  },
+  editTradeCancelBtn: {
+    height: 40,
+    paddingHorizontal: Spacing.three,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editTradeCancelText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  editTradeSaveBtn: {
+    height: 40,
+    paddingHorizontal: Spacing.four,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editTradeSaveText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

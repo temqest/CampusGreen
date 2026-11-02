@@ -81,12 +81,14 @@ export default function MarketplaceScreen() {
   // Load active student profile & orders to compute live personal Green Impact
   const loadUserActivity = useCallback(async () => {
     try {
+      let activeUserId = 'user_active_student';
       const local = await AsyncStorage.getItem('@campusgreen_user_profile');
       if (local) {
         const parsed = JSON.parse(local);
+        if (parsed.id) activeUserId = parsed.id;
         if (parsed.fullName) setProfileName(parsed.fullName);
       }
-      const orders = await fetchOrdersFromSupabase('user_active_student');
+      const orders = await fetchOrdersFromSupabase(activeUserId);
       if (orders) setUserOrders(orders);
     } catch (e) {
       console.warn('Error loading user activity for green impact:', e);
