@@ -30,9 +30,19 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const isEduEmail = (emailStr: string) => {
+    const trimmed = emailStr.trim().toLowerCase();
+    return /^[^\s@]+@[^\s@]+\.(?:edu|edu\.[a-z]{2,})$/.test(trimmed);
+  };
+
   const handleLogin = () => {
-    if (!email.trim()) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
       setErrorMessage('Please enter your university email address.');
+      return;
+    }
+    if (!isEduEmail(trimmedEmail)) {
+      setErrorMessage('Only institutional .edu student emails are accepted (e.g., student@adnu.edu.ph or @school.edu).');
       return;
     }
     if (!password.trim()) {

@@ -29,9 +29,19 @@ export default function ForgotPasswordScreen() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const isEduEmail = (emailStr: string) => {
+    const trimmed = emailStr.trim().toLowerCase();
+    return /^[^\s@]+@[^\s@]+\.(?:edu|edu\.[a-z]{2,})$/.test(trimmed);
+  };
+
   const handleReset = () => {
-    if (!email.trim() || !email.includes('@')) {
-      setErrorMessage('Please enter a valid student email.');
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setErrorMessage('Please enter your student email.');
+      return;
+    }
+    if (!isEduEmail(trimmedEmail)) {
+      setErrorMessage('Only institutional .edu student emails are accepted (e.g., student@adnu.edu.ph or @school.edu).');
       return;
     }
 

@@ -499,33 +499,36 @@ export default function ChatScreen() {
           flatListRef.current?.scrollToEnd({ animated: false });
         }}
         ListFooterComponent={
-          isTyping ? (
-            <View style={[styles.messageRow, styles.messageRowSeller]}>
-              <View
-                style={[
-                  styles.bubble,
-                  styles.bubbleSeller,
-                  styles.typingBubble,
-                  {
-                    backgroundColor: theme.surface,
-                    borderColor: theme.border,
-                  },
-                ]}>
-                <Ionicons
-                  name="ellipsis-horizontal"
-                  size={16}
-                  color={theme.primary}
-                />
-                <Text
+          <>
+            {isTyping && (
+              <View style={[styles.messageRow, styles.messageRowSeller]}>
+                <View
                   style={[
-                    styles.typingText,
-                    { color: theme.textSecondary },
+                    styles.bubble,
+                    styles.bubbleSeller,
+                    styles.typingBubble,
+                    {
+                      backgroundColor: theme.surface,
+                      borderColor: theme.border,
+                    },
                   ]}>
-                  {sellerDisplayName} is typing...
-                </Text>
+                  <Ionicons
+                    name="ellipsis-horizontal"
+                    size={16}
+                    color={theme.primary}
+                  />
+                  <Text
+                    style={[
+                      styles.typingText,
+                      { color: theme.textSecondary },
+                    ]}>
+                    {sellerDisplayName} is typing...
+                  </Text>
+                </View>
               </View>
-            </View>
-          ) : undefined
+            )}
+            <View style={{ height: 36 }} />
+          </>
         }
         ListHeaderComponent={
           /* Interactive Handover & Retrieval Agreement Card */
