@@ -324,25 +324,6 @@ export default function ChatScreen() {
             {item.sellerYear} · Verified Student
           </Text>
         </View>
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Meetup zones info"
-          style={({ pressed }) => [
-            styles.meetupZoneButton,
-            {
-              backgroundColor: theme.surfaceSubtle,
-              borderColor: theme.border,
-              opacity: pressed ? 0.75 : 1,
-            },
-          ]}
-          onPress={() => router.push('/meetup-zones')}>
-          <Ionicons name="location-outline" size={14} color={theme.primary} />
-          <Text
-            style={[styles.meetupZoneButtonText, { color: theme.primary }]}>
-            Zone
-          </Text>
-        </Pressable>
       </View>
 
       {/* Pinned Item Summary Bar */}
@@ -1448,19 +1429,6 @@ const styles = StyleSheet.create({
   },
   sellerSubtitle: {
     fontSize: 12,
-  },
-  meetupZoneButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  meetupZoneButtonText: {
-    fontSize: 11,
-    fontWeight: '600',
   },
   itemBar: {
     flexDirection: 'row',

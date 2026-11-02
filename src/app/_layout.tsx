@@ -14,7 +14,6 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="item/[id]" />
             <Stack.Screen name="payment/[id]" />
-            <Stack.Screen name="meetup-zones" />
             <Stack.Screen name="chat/[id]" />
           </Stack>
         </ChatProvider>
