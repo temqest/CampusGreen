@@ -15,6 +15,8 @@ interface MarketplaceHeaderProps {
   onChangeCampus: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  onPressFilter?: () => void;
+  hasActiveFilters?: boolean;
 }
 
 export function MarketplaceHeader({
@@ -22,6 +24,8 @@ export function MarketplaceHeader({
   onChangeCampus,
   searchQuery,
   onSearchChange,
+  onPressFilter,
+  hasActiveFilters,
 }: MarketplaceHeaderProps) {
   const theme = useTheme();
 
@@ -64,7 +68,7 @@ export function MarketplaceHeader({
         </Pressable>
       </View>
 
-      {/* Spacious Search Input Bar */}
+      {/* Search Input Bar with Embedded Filter Button */}
       <View
         style={[
           styles.searchContainer,
@@ -102,6 +106,35 @@ export function MarketplaceHeader({
               color={theme.textSecondary}
             />
           </Pressable>
+        )}
+
+        {onPressFilter && (
+          <>
+            <View style={[styles.filterDivider, { backgroundColor: theme.borderSubtle }]} />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Filter items"
+              hitSlop={8}
+              style={({ pressed }) => [
+                styles.inlineFilterButton,
+                hasActiveFilters && {
+                  backgroundColor: theme.primaryLight,
+                },
+                { opacity: pressed ? 0.7 : 1 },
+              ]}
+              onPress={onPressFilter}>
+              <Ionicons
+                name={hasActiveFilters ? 'options' : 'options-outline'}
+                size={18}
+                color={hasActiveFilters ? theme.primary : theme.textSecondary}
+              />
+              {hasActiveFilters && (
+                <View
+                  style={[styles.activeDot, { backgroundColor: theme.primary }]}
+                />
+              )}
+            </Pressable>
+          </>
         )}
       </View>
     </View>
@@ -168,5 +201,27 @@ const styles = StyleSheet.create({
   },
   clearButton: {
     padding: 2,
+    marginRight: Spacing.two,
+  },
+  filterDivider: {
+    width: 1,
+    height: 22,
+    marginHorizontal: Spacing.two,
+  },
+  inlineFilterButton: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  activeDot: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 });

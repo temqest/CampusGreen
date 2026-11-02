@@ -4,6 +4,7 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -23,10 +24,39 @@ import { DealTypeSelector } from '@/components/marketplace/deal-type-selector';
 import { CategoryBar } from '@/components/marketplace/category-bar';
 import { ItemCard } from '@/components/marketplace/item-card';
 
+const CATEGORIES: { label: ItemCategory; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { label: 'Textbooks & Reviewers', icon: 'book-outline' },
+  { label: 'Uniforms & Scrubs', icon: 'shirt-outline' },
+  { label: 'Tools & Lab Gear', icon: 'construct-outline' },
+  { label: 'Dorm & Room', icon: 'home-outline' },
+  { label: 'Tech & Gadgets', icon: 'hardware-chip-outline' },
+];
+
+const TRADE_OPTIONS: { label: string; value: TradeType | null }[] = [
+  { label: 'All Deals', value: null },
+  { label: 'Buy (₱)', value: 'buy' },
+  { label: 'Swap Zone', value: 'swap' },
+  { label: 'Freebies', value: 'free' },
+];
+
 const CAMPUS_OPTIONS = [
   'Ateneo de Naga University',
   'Univ. of Nueva Caceres',
   'All Campuses',
+];
+
+const POPULAR_COURSES = [
+  'BS Tourism Management',
+  'BS Accountancy',
+  'BS Nursing',
+  'BS Information Technology',
+  'BS Computer Science',
+  'BS Civil Engineering',
+  'BS Business Administration',
+  'BS Architecture',
+  'BS Secondary Education',
+  'BS Psychology',
+  'BS Biology',
 ];
 
 export default function MarketplaceScreen() {
@@ -36,11 +66,27 @@ export default function MarketplaceScreen() {
   // State
   const [selectedCampus, setSelectedCampus] = useState('Ateneo de Naga University');
   const [campusModalVisible, setCampusModalVisible] = useState(false);
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTradeType, setSelectedTradeType] = useState<TradeType | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [greenStats] = useState(INITIAL_GREEN_IMPACT);
+
+  const isSearching = searchQuery.trim().length > 0;
+
+  // Available courses dynamically gathered from active items + popular list
+  const availableCourses = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach((item) => {
+      if (item.courseTag && item.courseTag.trim().length > 0) {
+        set.add(item.courseTag.trim());
+      }
+    });
+    POPULAR_COURSES.forEach((course) => set.add(course));
+    return Array.from(set).sort();
+  }, [items]);
 
   // Pull-to-refresh
   const handleRefresh = () => {
@@ -55,6 +101,7 @@ export default function MarketplaceScreen() {
     setSearchQuery('');
     setSelectedTradeType(null);
     setSelectedCategory(null);
+    setSelectedCourse(null);
   };
 
   // Filtered Items
@@ -75,7 +122,12 @@ export default function MarketplaceScreen() {
         return false;
       }
 
-      // 4. Search Query Filter
+      // 4. Course Filter
+      if (selectedCourse && item.courseTag?.toLowerCase() !== selectedCourse.toLowerCase()) {
+        return false;
+      }
+
+      // 5. Search Query Filter
       if (searchQuery.trim().length > 0) {
         const query = searchQuery.toLowerCase().trim();
         const matchesTitle = item.title.toLowerCase().includes(query);
@@ -91,12 +143,13 @@ export default function MarketplaceScreen() {
 
       return true;
     });
-  }, [items, selectedCampus, selectedTradeType, selectedCategory, searchQuery]);
+  }, [items, selectedCampus, selectedTradeType, selectedCategory, selectedCourse, searchQuery]);
 
   const hasActiveFilters =
     searchQuery.trim().length > 0 ||
     selectedTradeType !== null ||
-    selectedCategory !== null;
+    selectedCategory !== null ||
+    selectedCourse !== null;
 
   return (
     <SafeAreaView
@@ -125,22 +178,51 @@ export default function MarketplaceScreen() {
               onChangeCampus={() => setCampusModalVisible(true)}
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
+              onPressFilter={() => setFilterModalVisible(true)}
+              hasActiveFilters={
+                selectedTradeType !== null ||
+                selectedCategory !== null ||
+                selectedCourse !== null
+              }
             />
 
-            {/* Green Impact Counter (Wallet-style Sustainability Card) */}
-            <GreenImpactCard stats={greenStats} />
+            {!isSearching ? (
+              <>
+                {/* Green Impact Counter (Wallet-style Sustainability Card) */}
+                <GreenImpactCard stats={greenStats} />
 
-            {/* Deal Type Selector (All, Buy, Swap, Free) */}
-            <DealTypeSelector
-              selectedTradeType={selectedTradeType}
-              onSelectTradeType={setSelectedTradeType}
-            />
+                {/* Deal Type Selector (All, Buy, Swap, Free) */}
+                <DealTypeSelector
+                  selectedTradeType={selectedTradeType}
+                  onSelectTradeType={setSelectedTradeType}
+                />
 
-            {/* Category Filter Bar */}
-            <CategoryBar
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-            />
+                {/* Category Filter Bar */}
+                <CategoryBar
+                  selectedCategory={selectedCategory}
+                  onSelectCategory={setSelectedCategory}
+                />
+              </>
+            ) : (
+              /* Search query indicator bar when searching */
+              <View style={styles.searchActiveBar}>
+                <View style={styles.searchActiveBadge}>
+                  <Ionicons name="search" size={13} color={theme.primary} />
+                  <Text style={[styles.searchActiveText, { color: theme.primary }]}>
+                    Searching: &ldquo;{searchQuery}&rdquo;
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search input"
+                  hitSlop={6}
+                  onPress={() => setSearchQuery('')}>
+                  <Text style={[styles.clearSearchLink, { color: theme.textSecondary }]}>
+                    Exit search
+                  </Text>
+                </Pressable>
+              </View>
+            )}
 
             {/* Feed Status Row: Results count & clear filters button */}
             <View style={styles.feedStatusRow}>
@@ -263,6 +345,284 @@ export default function MarketplaceScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* Filter Modal */}
+      <Modal
+        visible={filterModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setFilterModalVisible(false)}>
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setFilterModalVisible(false)}>
+          <Pressable
+            style={[styles.filterModalCard, { backgroundColor: theme.surface }]}
+            onPress={(e) => e.stopPropagation()}>
+            <View style={styles.filterModalHeader}>
+              <View>
+                <Text style={[styles.filterModalTitle, { color: theme.text }]}>
+                  Filter Marketplace
+                </Text>
+                <Text style={[styles.filterModalSubtitle, { color: theme.textSecondary }]}>
+                  Refine by deal type, category, or course
+                </Text>
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Close filter modal"
+                hitSlop={8}
+                onPress={() => setFilterModalVisible(false)}
+                style={styles.modalCloseButton}>
+                <Ionicons name="close" size={20} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.filterModalScrollContent}>
+              {/* Deal Type Section */}
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>
+                  DEAL TYPE
+                </Text>
+                <View style={styles.filterChipGrid}>
+                  {TRADE_OPTIONS.map((opt) => {
+                    const isSelected = selectedTradeType === opt.value;
+                    return (
+                      <Pressable
+                        key={opt.label}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Select deal filter ${opt.label}`}
+                        style={[
+                          styles.filterModalChip,
+                          {
+                            backgroundColor: isSelected
+                              ? theme.primary
+                              : theme.surfaceSubtle,
+                            borderColor: isSelected
+                              ? theme.primary
+                              : theme.border,
+                          },
+                        ]}
+                        onPress={() => setSelectedTradeType(opt.value)}>
+                        <Text
+                          style={[
+                            styles.filterModalChipText,
+                            {
+                              color: isSelected ? '#FFFFFF' : theme.text,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}>
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Category Section */}
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>
+                  CATEGORY
+                </Text>
+                <View style={styles.filterChipGrid}>
+                  {/* All categories option */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="All Categories"
+                    style={[
+                      styles.filterModalChip,
+                      {
+                        backgroundColor:
+                          selectedCategory === null
+                            ? theme.primary
+                            : theme.surfaceSubtle,
+                        borderColor:
+                          selectedCategory === null
+                            ? theme.primary
+                            : theme.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedCategory(null)}>
+                    <Ionicons
+                      name="grid-outline"
+                      size={14}
+                      color={selectedCategory === null ? '#FFFFFF' : theme.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.filterModalChipText,
+                        {
+                          color: selectedCategory === null ? '#FFFFFF' : theme.text,
+                          fontWeight: selectedCategory === null ? '700' : '500',
+                        },
+                      ]}>
+                      All Categories
+                    </Text>
+                  </Pressable>
+
+                  {CATEGORIES.map((cat) => {
+                    const isSelected = selectedCategory === cat.label;
+                    return (
+                      <Pressable
+                        key={cat.label}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Category filter ${cat.label}`}
+                        style={[
+                          styles.filterModalChip,
+                          {
+                            backgroundColor: isSelected
+                              ? theme.primary
+                              : theme.surfaceSubtle,
+                            borderColor: isSelected
+                              ? theme.primary
+                              : theme.border,
+                          },
+                        ]}
+                        onPress={() =>
+                          setSelectedCategory(isSelected ? null : cat.label)
+                        }>
+                        <Ionicons
+                          name={cat.icon}
+                          size={14}
+                          color={isSelected ? '#FFFFFF' : theme.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.filterModalChipText,
+                            {
+                              color: isSelected ? '#FFFFFF' : theme.text,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}>
+                          {cat.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Course Program Section */}
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionTitle, { color: theme.textSecondary }]}>
+                  COURSE & ACADEMIC PROGRAM
+                </Text>
+                <View style={styles.filterChipGrid}>
+                  {/* All courses option */}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="All Courses"
+                    style={[
+                      styles.filterModalChip,
+                      {
+                        backgroundColor:
+                          selectedCourse === null
+                            ? theme.primary
+                            : theme.surfaceSubtle,
+                        borderColor:
+                          selectedCourse === null
+                            ? theme.primary
+                            : theme.border,
+                      },
+                    ]}
+                    onPress={() => setSelectedCourse(null)}>
+                    <Ionicons
+                      name="school-outline"
+                      size={14}
+                      color={selectedCourse === null ? '#FFFFFF' : theme.textSecondary}
+                    />
+                    <Text
+                      style={[
+                        styles.filterModalChipText,
+                        {
+                          color: selectedCourse === null ? '#FFFFFF' : theme.text,
+                          fontWeight: selectedCourse === null ? '700' : '500',
+                        },
+                      ]}>
+                      All Courses
+                    </Text>
+                  </Pressable>
+
+                  {availableCourses.map((course) => {
+                    const isSelected = selectedCourse === course;
+                    return (
+                      <Pressable
+                        key={course}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Course filter ${course}`}
+                        style={[
+                          styles.filterModalChip,
+                          {
+                            backgroundColor: isSelected
+                              ? theme.primary
+                              : theme.surfaceSubtle,
+                            borderColor: isSelected
+                              ? theme.primary
+                              : theme.border,
+                          },
+                        ]}
+                        onPress={() =>
+                          setSelectedCourse(isSelected ? null : course)
+                        }>
+                        <Ionicons
+                          name="school-outline"
+                          size={14}
+                          color={isSelected ? '#FFFFFF' : theme.textSecondary}
+                        />
+                        <Text
+                          style={[
+                            styles.filterModalChipText,
+                            {
+                              color: isSelected ? '#FFFFFF' : theme.text,
+                              fontWeight: isSelected ? '700' : '500',
+                            },
+                          ]}>
+                          {course}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Actions Footer */}
+            <View style={styles.filterModalActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Reset filters"
+                style={[
+                  styles.filterResetAction,
+                  { borderColor: theme.border, backgroundColor: theme.surfaceSubtle },
+                ]}
+                onPress={() => {
+                  setSelectedTradeType(null);
+                  setSelectedCategory(null);
+                  setSelectedCourse(null);
+                }}>
+                <Text style={[styles.filterResetActionText, { color: theme.textSecondary }]}>
+                  Reset
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Apply filters"
+                style={[
+                  styles.filterApplyAction,
+                  { backgroundColor: theme.primary },
+                ]}
+                onPress={() => setFilterModalVisible(false)}>
+                <Text style={styles.filterApplyActionText}>
+                  Apply Filters
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -370,5 +730,110 @@ const styles = StyleSheet.create({
   },
   campusOptionText: {
     fontSize: 14,
+  },
+  searchActiveBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Spacing.four,
+    marginBottom: Spacing.two,
+  },
+  searchActiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexShrink: 1,
+  },
+  searchActiveText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  clearSearchLink: {
+    fontSize: 12,
+    fontWeight: '600',
+    paddingLeft: Spacing.two,
+  },
+  filterModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    borderRadius: Radius.xl,
+    padding: Spacing.five,
+    maxHeight: '85%',
+  },
+  filterModalScrollContent: {
+    paddingBottom: Spacing.three,
+  },
+  filterModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: Spacing.four,
+  },
+  filterModalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  filterModalSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalCloseButton: {
+    padding: 4,
+  },
+  filterSection: {
+    marginBottom: Spacing.four,
+  },
+  filterSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: Spacing.two,
+  },
+  filterChipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.two,
+  },
+  filterModalChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: 8,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+  },
+  filterModalChipText: {
+    fontSize: 13,
+  },
+  filterModalActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    marginTop: Spacing.two,
+  },
+  filterResetAction: {
+    flex: 1,
+    height: 44,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterResetActionText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  filterApplyAction: {
+    flex: 2,
+    height: 44,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterApplyActionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

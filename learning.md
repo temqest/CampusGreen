@@ -405,5 +405,15 @@ This document captures project-specific design standards, user preferences, and 
 - **Integrated Quota Enforcement**:
   - Tapping "Bump to Top" or toggling "Urgent Selling" on listings checks the active subscription quota. When exhausted or unsubscribed, gracefully present an action sheet prompting plan view instead of failing silently.
 
+### 24. Marketplace Feed: Search State & Filter Modal Ergonomics
+- **Search-First Full Viewport Feed**:
+  - When a user enters a search query in the marketplace search bar, automatically hide non-essential discovery widgets (such as the Green Impact wallet card, deal type segmented tabs, and horizontal category pills) to yield a full-page results feed.
+  - Present a clean, compact query indicator bar (`searchActiveBar`) showing the current search term alongside an explicit "Exit search" button so students can quickly reset back to default discovery browsing.
+- **Dedicated Filter Button & Sheet/Modal**:
+  - Embed the filter action button (`options-outline`) directly inside the search bar on the right side with an inline separator divider.
+  - Indicate active filtering states with a distinct active accent background and subtle corner dot without decorative badge fluff.
+  - Provide a scrollable modal sheet displaying Deal Types (`Buy`, `Swap Zone`, `Freebies`), Categories (`Textbooks`, `Uniforms`, etc.), and Academic Courses/Programs (`BS Tourism Management`, `BS Accountancy`, `BS Nursing`, etc.) with clean slate defaults, a Reset button, and an Apply CTA.
+
+
 
 
