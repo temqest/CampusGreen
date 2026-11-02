@@ -13,11 +13,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useBasket } from '@/context/basket-context';
+import { useChat } from '@/context/chat-context';
 
 export default function BasketScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { ensureConversation } = useChat();
   const {
     basketItems,
     removeFromBasket,
@@ -44,9 +46,10 @@ export default function BasketScreen() {
         keyExtractor={(b) => b.item.id}
         contentContainerStyle={[
           styles.listContent,
+          basketItems.length === 0 && styles.listContentEmpty,
           {
             paddingTop: insets.top + Spacing.three,
-            paddingBottom: insets.bottom + 120,
+            paddingBottom: insets.bottom + (basketItems.length > 0 ? 120 : Spacing.four),
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -210,12 +213,17 @@ export default function BasketScreen() {
                       opacity: pressed ? 0.75 : 1,
                     },
                   ]}
-                  onPress={() =>
+                  onPress={() => {
+                    ensureConversation(item);
                     router.push({
                       pathname: '/chat/[id]',
-                      params: { id: item.id },
-                    })
-                  }>
+                      params: {
+                        id: item.id,
+                        sellerName: item.sellerName,
+                        itemTitle: item.title,
+                      },
+                    });
+                  }}>
                   <Ionicons
                     name="chatbubbles-outline"
                     size={15}
@@ -416,6 +424,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.four,
     gap: Spacing.three,
   },
+  listContentEmpty: {
+    flexGrow: 1,
+  },
   headerBlock: {
     gap: Spacing.two,
     paddingBottom: Spacing.two,
@@ -578,6 +589,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: Spacing.seven,

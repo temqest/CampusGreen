@@ -18,6 +18,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchProfileByEmailFromSupabase, saveProfileToSupabase } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 
 export default function LoginScreen() {
   const theme = useTheme();
@@ -35,8 +38,8 @@ export default function LoginScreen() {
     return /^[^\s@]+@[^\s@]+\.(?:edu|edu\.[a-z]{2,})$/.test(trimmed);
   };
 
-  const handleLogin = () => {
-    const trimmedEmail = email.trim();
+  const handleLogin = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
     if (!trimmedEmail) {
       setErrorMessage('Please enter your university email address.');
       return;
@@ -53,10 +56,55 @@ export default function LoginScreen() {
     setErrorMessage('');
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // 1. Attempt Supabase Auth sign-in if enabled
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: trimmedEmail,
+        password: password.trim(),
+      });
+
+      // 2. Query Supabase profiles table by email
+      const matchedProfile = await fetchProfileByEmailFromSupabase(trimmedEmail);
+
+      // If neither Supabase Auth succeeded nor does a profile exist with this email
+      if (authError && !matchedProfile) {
+        setIsLoading(false);
+        setErrorMessage(
+          'No verified student account found with this email. Please check your credentials or tap Sign Up to create an account.'
+        );
+        return;
+      }
+
+      // 3. User is valid: Set active profile payload into local session
+      const activePayload = matchedProfile || {
+        id: 'user_active_student',
+        email: trimmedEmail,
+        fullName: authData?.user?.user_metadata?.full_name || 'Campus Student',
+        degreeProgram: 'BS Tourism Management',
+        yearLevel: '1st Year',
+        campus: 'Ateneo de Naga University',
+        preferredMeetupSpot: 'Main Library Ground Floor',
+      };
+
+      // Always sync the user profile locally and ensure active student ID is updated
+      await AsyncStorage.setItem(
+        '@campusgreen_user_profile',
+        JSON.stringify({ ...activePayload, id: 'user_active_student' })
+      );
+
+      // Upsert into Supabase for 'user_active_student'
+      await saveProfileToSupabase({
+        ...activePayload,
+        id: 'user_active_student',
+      });
+
       setIsLoading(false);
       router.replace('/(tabs)/marketplace');
-    }, 450);
+    } catch (err: any) {
+      console.warn('Login validation error:', err);
+      setIsLoading(false);
+      setErrorMessage('Unable to log in at this moment. Please check your network connection.');
+    }
   };
 
   return (

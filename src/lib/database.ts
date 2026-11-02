@@ -193,6 +193,33 @@ export async function fetchProfileFromSupabase(id: string): Promise<UserProfile 
   };
 }
 
+export async function fetchProfileByEmailFromSupabase(email: string): Promise<UserProfile | null> {
+  const cleanEmail = email.trim().toLowerCase();
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .ilike('email', cleanEmail)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('Error fetching profile by email from Supabase:', error.message);
+    return null;
+  }
+
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    email: data.email || undefined,
+    fullName: data.full_name || 'Campus Student',
+    degreeProgram: data.degree_program || 'BS Tourism Management',
+    yearLevel: data.year_level || '3rd Year',
+    campus: data.campus || 'Ateneo de Naga University',
+    avatarUrl: data.avatar_url || undefined,
+    preferredMeetupSpot: data.preferred_meetup_spot || 'Alingal Hall (Tourism Lobby)',
+  };
+}
+
 export async function saveProfileToSupabase(profile: UserProfile): Promise<void> {
   const payload = {
     id: profile.id,

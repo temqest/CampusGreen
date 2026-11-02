@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import { supabase } from '@/lib/supabase';
 
 export default function RegisterScreen() {
   const theme = useTheme();
@@ -38,7 +39,7 @@ export default function RegisterScreen() {
     return /^[^\s@]+@[^\s@]+\.(?:edu|edu\.[a-z]{2,})$/.test(trimmed);
   };
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (!fullName.trim()) {
       setErrorMessage('Please enter your full name.');
       return;
@@ -64,16 +65,29 @@ export default function RegisterScreen() {
     setErrorMessage('');
     setIsLoading(true);
 
-    setTimeout(() => {
+    try {
+      // Register with Supabase auth (fallback if email auth is disabled)
+      await supabase.auth.signUp({
+        email: trimmedEmail,
+        password: password.trim(),
+        options: {
+          data: {
+            full_name: fullName.trim(),
+          },
+        },
+      }).catch((e) => console.warn('Supabase auth signUp note:', e));
+    } catch (e) {
+      console.warn('Supabase register error:', e);
+    } finally {
       setIsLoading(false);
       router.push({
         pathname: '/(auth)/onboarding',
         params: {
           name: fullName.trim(),
-          email: email.trim(),
+          email: trimmedEmail,
         },
       });
-    }, 400);
+    }
   };
 
   return (

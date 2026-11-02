@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { MarketplaceItem } from '@/types/item';
+import { useBasket } from '@/context/basket-context';
+import { useChat } from '@/context/chat-context';
 
 interface ItemCardProps {
   item: MarketplaceItem;
@@ -19,6 +21,20 @@ interface ItemCardProps {
 export function ItemCard({ item }: ItemCardProps) {
   const theme = useTheme();
   const router = useRouter();
+  const { addToBasket, removeFromBasket, isInBasket } = useBasket();
+  const { ensureConversation } = useChat();
+
+  const inBasket = isInBasket(item.id);
+
+  const handleBasketToggle = async (e: any) => {
+    e?.stopPropagation?.();
+    if (inBasket) {
+      await removeFromBasket(item.id);
+    } else {
+      await addToBasket(item);
+      ensureConversation(item);
+    }
+  };
 
   const handlePress = () => {
     router.push({
@@ -187,20 +203,51 @@ export function ItemCard({ item }: ItemCardProps) {
           </Text>
         </View>
 
-        {/* Seller Info & Student Trust */}
+        {/* Seller Info & Quick Add to Basket */}
         <View style={[styles.sellerRow, { borderTopColor: theme.borderSubtle }]}>
-          <Text
-            numberOfLines={1}
-            style={[styles.sellerName, { color: theme.textSecondary }]}>
-            {item.sellerName}
-          </Text>
-          {item.isVerifiedStudent && (
-            <Ionicons
-              name="checkmark-circle"
-              size={13}
-              color={theme.primary}
-              style={styles.verifiedIcon}
-            />
+          <View style={styles.sellerIdentity}>
+            <Text
+              numberOfLines={1}
+              style={[styles.sellerName, { color: theme.textSecondary }]}>
+              {item.sellerName}
+            </Text>
+            {item.isVerifiedStudent && (
+              <Ionicons
+                name="checkmark-circle"
+                size={13}
+                color={theme.primary}
+                style={styles.verifiedIcon}
+              />
+            )}
+          </View>
+
+          {item.tradeType === 'buy' && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={inBasket ? 'In Basket' : 'Add to Basket'}
+              hitSlop={6}
+              onPress={handleBasketToggle}
+              style={({ pressed }) => [
+                styles.quickBasketBtn,
+                {
+                  backgroundColor: inBasket ? theme.primary : theme.surfaceSubtle,
+                  borderColor: inBasket ? theme.primary : theme.border,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}>
+              <Ionicons
+                name={inBasket ? 'basket' : 'basket-outline'}
+                size={13}
+                color={inBasket ? '#FFFFFF' : theme.primary}
+              />
+              <Text
+                style={[
+                  styles.quickBasketText,
+                  { color: inBasket ? '#FFFFFF' : theme.primary },
+                ]}>
+                {inBasket ? 'In Basket' : '+ Basket'}
+              </Text>
+            </Pressable>
           )}
         </View>
       </View>
@@ -323,17 +370,37 @@ const styles = StyleSheet.create({
   sellerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     borderTopWidth: 1,
     paddingTop: 6,
     marginTop: 4,
     gap: 4,
   },
+  sellerIdentity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 3,
+  },
   sellerName: {
     fontSize: 11,
     fontWeight: '500',
-    flex: 1,
+    flexShrink: 1,
   },
   verifiedIcon: {
-    marginLeft: 2,
+    marginLeft: 1,
+  },
+  quickBasketBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+  },
+  quickBasketText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

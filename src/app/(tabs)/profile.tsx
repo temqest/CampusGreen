@@ -21,9 +21,8 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useThemeContext } from '@/context/theme-context';
 import { useItems } from '@/context/items-context';
-import { INITIAL_GREEN_IMPACT } from '@/data/mock-items';
 import { EscrowTransaction, MarketplaceItem } from '@/types/item';
-import { uploadImageToSupabase } from '@/lib/supabase';
+import { supabase, uploadImageToSupabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   fetchOrdersFromSupabase,
@@ -237,6 +236,13 @@ export default function ProfileScreen() {
   });
   const activeListings = userItems.filter((i) => i.status !== 'sold');
   const soldListings = userItems.filter((i) => i.status === 'sold');
+
+  // Dynamic user stats derived from completed listings and transactions
+  const totalCompletedDeals = soldListings.length + studentPurchases.length;
+  const userCo2Saved = soldListings.reduce(
+    (sum, item) => sum + (item.estimatedCo2SavedKg || 1.2),
+    0
+  );
 
   // Handle Listing Bump
   const handleBump = (item: MarketplaceItem) => {
@@ -507,7 +513,15 @@ export default function ProfileScreen() {
       {
         text: 'Log Out',
         style: 'destructive',
-        onPress: () => router.replace('/(auth)/login'),
+        onPress: async () => {
+          try {
+            await AsyncStorage.removeItem('@campusgreen_user_profile');
+            await supabase.auth.signOut().catch(() => {});
+          } catch (e) {
+            console.warn('Error clearing profile on logout:', e);
+          }
+          router.replace('/(auth)/login');
+        },
       },
     ]);
   };
@@ -778,17 +792,29 @@ export default function ProfileScreen() {
             <View style={styles.matrixItem}>
               <View style={styles.metricRow}>
                 <Ionicons name="star" size={13} color={theme.gold} style={{ marginRight: 3 }} />
-                <Text style={[styles.matrixVal, { color: theme.text }]}>4.9</Text>
+                <Text style={[styles.matrixVal, { color: theme.text }]}>
+                  {totalCompletedDeals > 0 ? '5.0' : '—'}
+                </Text>
               </View>
-              <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>24 Reviews</Text>
+              <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>
+                {totalCompletedDeals > 0
+                  ? `${totalCompletedDeals} ${totalCompletedDeals === 1 ? 'Review' : 'Reviews'}`
+                  : 'No reviews'}
+              </Text>
             </View>
 
             <View style={[styles.matrixDivider, { backgroundColor: theme.border }]} />
 
             {/* Metric 2: Meetup Completion */}
             <View style={styles.matrixItem}>
-              <Text style={[styles.matrixVal, { color: theme.primary }]}>100%</Text>
-              <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>Meetups</Text>
+              <Text style={[styles.matrixVal, { color: theme.primary }]}>
+                {totalCompletedDeals > 0 ? '100%' : '—'}
+              </Text>
+              <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>
+                {totalCompletedDeals > 0
+                  ? `${totalCompletedDeals} ${totalCompletedDeals === 1 ? 'Meetup' : 'Meetups'}`
+                  : 'Meetups'}
+              </Text>
             </View>
 
             <View style={[styles.matrixDivider, { backgroundColor: theme.border }]} />
@@ -798,7 +824,7 @@ export default function ProfileScreen() {
               <View style={styles.metricRow}>
                 <Ionicons name="leaf" size={13} color={theme.primary} style={{ marginRight: 3 }} />
                 <Text style={[styles.matrixVal, { color: theme.primaryDark }]}>
-                  {INITIAL_GREEN_IMPACT.userCo2SavedKg}kg
+                  {userCo2Saved > 0 ? `${userCo2Saved.toFixed(1)}kg` : '0kg'}
                 </Text>
               </View>
               <Text style={[styles.matrixLabel, { color: theme.textSecondary }]}>CO₂ Saved</Text>

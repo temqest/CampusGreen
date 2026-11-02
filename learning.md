@@ -431,21 +431,21 @@ This document captures project-specific design standards, user preferences, and 
 - **React 19 / ESLint `react-hooks/set-state-in-effect` Guard**:
   - Do NOT call synchronous `setState` inside `useEffect` bodies. Always attach state updates inside `.then()` or `.finally()` asynchronous callbacks or event handlers to avoid cascading render lint errors.
 
-### 27. Full Supabase Persistence for Chat, Basket, Orders & Escrow
-- **Supabase-Backed Chat Architecture**:
-  - `chat_conversations` table stores `id`, `item_id`, `buyer_id`, `buyer_name`, `seller_id`, `seller_name`, `last_message`, `last_message_at`, `unread_count`.
-  - `chat_messages` table stores `id`, `conversation_id`, `sender_id`, `sender_name`, `text`, `type`, `created_at`, `status`.
-  - In `ChatContext`, conversations and messages load asynchronously from Supabase while maintaining optimistic in-memory dispatching for instantaneous chat interaction.
-  - Sending messages and action buttons (e.g. Meetup Proposal, Location Pin, Payment Prompts) persist directly to Supabase PostgREST tables.
-- **Supabase-Backed Basket Architecture**:
-  - `basket_items` table stores `id`, `user_id`, `item_id`, `title`, `price`, `image_url`, `condition`, `category`, `deal_type`, `seller_name`, `meetup_spot`, `created_at`.
-  - `useBasket()` provides instant reactive updates to the basket badge and screen, while seamlessly executing `saveBasketItemToSupabase()` and `deleteBasketItemFromSupabase()`.
-  - Add to Basket button in Item Detail docks (`item/[id].tsx`) toggles membership dynamically with checkmark and basket navigation feedback.
-- **Supabase-Backed Orders & Escrow Transactions**:
-  - `orders` table stores confirmed student purchases with item details, payment method, escrow code, meetup status, and timestamps.
-  - `transactions` table records all credit/debit movements against the student's campus e-wallet.
-  - When completing checkout in `payment/[id].tsx`, `saveOrderToSupabase()` and `saveTransactionToSupabase()` write confirmed orders and escrow holds directly to Supabase.
-  - The Profile screen automatically loads user purchases from Supabase on mount via `fetchOrdersFromSupabase()`.
+### 28. Zero Hard-Coded Profile Stats
+- Profile metrics (Trust Rating, Reviews Count, Completed Meetups, and CO₂ Saved) must never display hardcoded dummy numbers (e.g. `4.9`, `24 Reviews`, `100%`, `18.4kg`).
+- They must be computed dynamically from actual user activity:
+  - Trust Rating & Review Count reflect verified completed transactions (`soldListings.length + studentPurchases.length`), gracefully displaying clean neutral placeholders (`—` and `No reviews`) when the user has no transaction history.
+  - Meetup count reflects verified completed campus handovers (`—` when 0).
+  - CO₂ Saved accumulates from actual sold listing eco impacts (`0kg` when empty).
+
+### 30. Supabase Authentication & Profile Verification
+- **Real Login Verification**: `login.tsx` queries Supabase auth and the `profiles` table by email. If an account does not exist or credentials fail, it rejects the attempt with *"No verified student account found with this email. Please check your credentials or tap Sign Up to create an account."*
+- **Proper Session Tear-down on Logout**: Tapping **Log Out** in `profile.tsx` clears `@campusgreen_user_profile` from `AsyncStorage` and calls `supabase.auth.signOut()`, preventing stale profile data from bleeding into subsequent login sessions.
+- **Account-Bound Profile State**: On login, the matched profile is loaded into local storage and synced to the active student session.
+
+
+
+
 
 
 

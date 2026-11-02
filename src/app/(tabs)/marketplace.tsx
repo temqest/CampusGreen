@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -9,14 +9,17 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { Spacing, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useItems } from '@/context/items-context';
 import { ItemCategory, TradeType } from '@/types/item';
 import { INITIAL_GREEN_IMPACT } from '@/data/mock-items';
+import { fetchOrdersFromSupabase } from '@/lib/database';
 
 import { MarketplaceHeader } from '@/components/marketplace/marketplace-header';
 import { GreenImpactCard } from '@/components/marketplace/green-impact-card';
@@ -72,7 +75,57 @@ export default function MarketplaceScreen() {
   const [selectedCategory, setSelectedCategory] = useState<ItemCategory | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [greenStats] = useState(INITIAL_GREEN_IMPACT);
+  const [profileName, setProfileName] = useState('New Student');
+  const [userOrders, setUserOrders] = useState<any[]>([]);
+
+  // Load active student profile & orders to compute live personal Green Impact
+  const loadUserActivity = useCallback(async () => {
+    try {
+      const local = await AsyncStorage.getItem('@campusgreen_user_profile');
+      if (local) {
+        const parsed = JSON.parse(local);
+        if (parsed.fullName) setProfileName(parsed.fullName);
+      }
+      const orders = await fetchOrdersFromSupabase('user_active_student');
+      if (orders) setUserOrders(orders);
+    } catch (e) {
+      console.warn('Error loading user activity for green impact:', e);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadUserActivity();
+    }, [loadUserActivity])
+  );
+
+  // Compute live user stats from active items sold & purchased
+  const liveUserStats = useMemo(() => {
+    const userSoldItems = items.filter((item) => {
+      const isOwner = (item as any).isOwner === true;
+      const isNamedSeller =
+        profileName &&
+        profileName !== 'New Student' &&
+        profileName !== 'Student' &&
+        item.sellerName.toLowerCase() === profileName.toLowerCase();
+      return (isOwner || isNamedSeller) && item.status === 'sold';
+    });
+
+    const userItemsReused = userSoldItems.length + userOrders.length;
+    const userCo2SavedKg = Number(
+      userSoldItems
+        .reduce((sum, item) => sum + (item.estimatedCo2SavedKg || 1.2), 0)
+        .toFixed(1)
+    );
+    const userMoneySavedPhp = userOrders.reduce((sum, order) => sum + (order.price || 0), 0);
+
+    return {
+      ...INITIAL_GREEN_IMPACT,
+      userItemsReused,
+      userCo2SavedKg,
+      userMoneySavedPhp,
+    };
+  }, [items, profileName, userOrders]);
 
   const isSearching = searchQuery.trim().length > 0;
 
@@ -191,7 +244,7 @@ export default function MarketplaceScreen() {
             {!isSearching ? (
               <>
                 {/* Green Impact Counter (Wallet-style Sustainability Card) */}
-                <GreenImpactCard stats={greenStats} />
+                <GreenImpactCard stats={liveUserStats} />
 
                 {/* Deal Type Selector (All, Buy, Swap, Free) */}
                 <DealTypeSelector

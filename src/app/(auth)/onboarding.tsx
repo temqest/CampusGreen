@@ -149,7 +149,8 @@ export default function OnboardingScreen() {
       setIsLoading(true);
       const studentName = (name && typeof name === 'string' && name.trim().length > 0 ? name : 'New Student').trim();
       const studentEmail = (email && typeof email === 'string' && email.trim().length > 0 ? email : '').trim();
-      const degree = selectedCourse || customCourse || 'Select Degree Program';
+      const selectedDegreeObj = DEGREE_PROGRAMS.find((p) => p.id === selectedCourse);
+      const degree = (selectedDegreeObj ? selectedDegreeObj.name : (customCourse.trim() || 'BS Tourism Management'));
       const year = YEAR_LEVELS.find((y) => y.id === selectedYear)?.label || '1st Year';
 
       const profilePayload = {

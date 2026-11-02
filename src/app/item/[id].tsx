@@ -20,6 +20,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useItems } from '@/context/items-context';
 import { useBasket } from '@/context/basket-context';
+import { useChat } from '@/context/chat-context';
 import { ItemPhoto } from '@/types/item';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -32,6 +33,7 @@ export default function ItemDetailScreen() {
   const insets = useSafeAreaInsets();
   const { items } = useItems();
   const { addToBasket, removeFromBasket, isInBasket } = useBasket();
+  const { ensureConversation } = useChat();
 
   const item = items.find((i) => i.id === id) || items[0];
   const inBasket = item ? isInBasket(item.id) : false;
@@ -574,6 +576,7 @@ export default function ItemDetailScreen() {
                   await removeFromBasket(item.id);
                 } else {
                   await addToBasket(item);
+                  ensureConversation(item);
                 }
               }}>
               <Ionicons

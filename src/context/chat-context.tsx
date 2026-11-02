@@ -45,6 +45,7 @@ interface ChatContextType {
     itemMeta?: Partial<MarketplaceItem>
   ) => void;
   addSystemMessage: (itemId: string, text: string) => void;
+  ensureConversation: (item: MarketplaceItem) => ChatConversation;
   isTypingByItemId: Record<string, boolean>;
   markAsRead: (itemId: string) => void;
   refreshConversations: () => Promise<void>;
@@ -147,6 +148,43 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       text,
       timestamp: 'Just now',
     }).catch((err) => console.warn('Supabase save system message error:', err));
+  }, []);
+
+  const ensureConversation = useCallback((item: MarketplaceItem): ChatConversation => {
+    const conversationId = `conv-${item.id}`;
+    const initialGreeting =
+      item.tradeType === 'swap'
+        ? `Hi! Thanks for your interest in swapping for my ${item.title}. What gear or item are you proposing to trade?`
+        : item.tradeType === 'free'
+        ? `Hi! Glad someone can make use of the ${item.title}! It's completely free for campus pickup at ${item.safeMeetupSpot}.`
+        : `Hi! Thanks for checking out the ${item.title}. It's still available for meetup at ${item.safeMeetupSpot}. Feel free to ask any questions!`;
+
+    const newConv: ChatConversation = {
+      id: conversationId,
+      itemId: item.id,
+      sellerName: item.sellerName || 'Campus Student',
+      sellerYear: item.sellerYear || 'Verified Student',
+      itemTitle: item.title,
+      price: item.price ?? null,
+      tradeType: item.tradeType || 'buy',
+      lastMessage: initialGreeting,
+      timestamp: 'Just now',
+      unreadCount: 0,
+      safeMeetupSpot: item.safeMeetupSpot || 'Main Library Ground Floor',
+      sellerAvatarUri: item.sellerAvatarUri,
+    };
+
+    setConversations((prev) => {
+      const existing = prev.find((c) => c.itemId === item.id);
+      if (existing) return prev;
+      return [newConv, ...prev];
+    });
+
+    saveChatConversationToSupabase(newConv).catch((err) =>
+      console.warn('Supabase save auto-generated conversation error:', err)
+    );
+
+    return newConv;
   }, []);
 
   const sendMessage = useCallback(
@@ -325,6 +363,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         getMessages,
         sendMessage,
         addSystemMessage,
+        ensureConversation,
         isTypingByItemId,
         markAsRead,
         refreshConversations,
