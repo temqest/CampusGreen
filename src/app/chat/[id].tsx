@@ -18,8 +18,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { MOCK_ITEMS } from '@/data/mock-items';
+import { useItems } from '@/context/items-context';
 import { Message, useChat } from '@/context/chat-context';
+import { MarketplaceItem } from '@/types/item';
 
 type AgreementStatus = 'pending' | 'accepted' | 'completed';
 
@@ -54,8 +55,17 @@ export default function ChatScreen() {
 
   const { getMessages, sendMessage, addSystemMessage, isTypingByItemId } =
     useChat();
+  const { items, getItemById } = useItems();
 
-  const item = MOCK_ITEMS.find((i) => i.id === id) || MOCK_ITEMS[0];
+  const foundItem = getItemById(id) || items.find((i) => i.id === id);
+  const item = foundItem || ({
+    id,
+    sellerName: paramSellerName || 'Campus Student',
+    title: paramItemTitle || 'Marketplace Item',
+    tradeType: 'buy',
+    safeMeetupSpot: 'Main Library Ground Floor',
+    price: null,
+  } as unknown as MarketplaceItem);
   const sellerDisplayName = paramSellerName || item.sellerName;
   const itemDisplayName = paramItemTitle || item.title;
 

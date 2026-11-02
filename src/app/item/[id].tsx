@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useItems } from '@/context/items-context';
-import { MOCK_ITEMS } from '@/data/mock-items';
+import { useBasket } from '@/context/basket-context';
 import { ItemPhoto } from '@/types/item';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -31,8 +31,10 @@ export default function ItemDetailScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { items } = useItems();
+  const { addToBasket, removeFromBasket, isInBasket } = useBasket();
 
-  const item = items.find((i) => i.id === id) || items[0] || MOCK_ITEMS[0];
+  const item = items.find((i) => i.id === id) || items[0];
+  const inBasket = item ? isInBasket(item.id) : false;
   const photos: ItemPhoto[] =
     item.photos && item.photos.length > 0
       ? item.photos
@@ -556,6 +558,31 @@ export default function ItemDetailScreen() {
         ]}>
         {item.tradeType === 'buy' && item.price !== null && item.price > 0 ? (
           <View style={styles.dockRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={inBasket ? 'Remove from basket' : 'Add to basket'}
+              style={({ pressed }) => [
+                styles.chatSecondaryButton,
+                {
+                  backgroundColor: inBasket ? theme.badgeGreenBg : theme.surfaceSubtle,
+                  borderColor: inBasket ? theme.primary : theme.border,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+              onPress={async () => {
+                if (inBasket) {
+                  await removeFromBasket(item.id);
+                } else {
+                  await addToBasket(item);
+                }
+              }}>
+              <Ionicons
+                name={inBasket ? 'basket' : 'basket-outline'}
+                size={20}
+                color={inBasket ? theme.primary : theme.text}
+              />
+            </Pressable>
+
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Chat with seller"

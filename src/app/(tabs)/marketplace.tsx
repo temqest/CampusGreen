@@ -61,7 +61,7 @@ const POPULAR_COURSES = [
 
 export default function MarketplaceScreen() {
   const theme = useTheme();
-  const { items } = useItems();
+  const { items, refreshItems } = useItems();
 
   // State
   const [selectedCampus, setSelectedCampus] = useState('Ateneo de Naga University');
@@ -88,12 +88,14 @@ export default function MarketplaceScreen() {
     return Array.from(set).sort();
   }, [items]);
 
-  // Pull-to-refresh
-  const handleRefresh = () => {
+  // Pull-to-refresh connected to Supabase
+  const handleRefresh = async () => {
     setRefreshing(true);
-    setTimeout(() => {
+    try {
+      await refreshItems();
+    } finally {
       setRefreshing(false);
-    }, 600);
+    }
   };
 
   // Reset all filters

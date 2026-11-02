@@ -12,12 +12,14 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Spacing, Radius } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { saveProfileToSupabase } from '@/lib/database';
 
 const YEAR_LEVELS = [
   { id: '1', label: '1st Year' },
@@ -102,6 +104,7 @@ export default function OnboardingScreen() {
   const theme = useTheme();
   const colorScheme = useColorScheme();
   const router = useRouter();
+  const { name, email } = useLocalSearchParams<{ name?: string; email?: string }>();
 
   // 3-Step Need-Focused Flow:
   // Step 1: Your Academic Focus (Year & Degree)
@@ -139,15 +142,35 @@ export default function OnboardingScreen() {
     );
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < 3) {
       setStep(step + 1);
     } else {
       setIsLoading(true);
-      setTimeout(() => {
+      const studentName = (name && typeof name === 'string' && name.trim().length > 0 ? name : 'New Student').trim();
+      const studentEmail = (email && typeof email === 'string' && email.trim().length > 0 ? email : '').trim();
+      const degree = selectedCourse || customCourse || 'Select Degree Program';
+      const year = YEAR_LEVELS.find((y) => y.id === selectedYear)?.label || '1st Year';
+
+      const profilePayload = {
+        id: 'user_active_student',
+        email: studentEmail,
+        fullName: studentName,
+        degreeProgram: degree,
+        yearLevel: year,
+        campus: 'Ateneo de Naga University',
+        preferredMeetupSpot: 'Main Library Ground Floor',
+      };
+
+      try {
+        await AsyncStorage.setItem('@campusgreen_user_profile', JSON.stringify(profilePayload));
+        await saveProfileToSupabase(profilePayload);
+      } catch (err) {
+        console.warn('Error saving onboarded user profile:', err);
+      } finally {
         setIsLoading(false);
         router.replace('/(tabs)/marketplace');
-      }, 400);
+      }
     }
   };
 

@@ -1,0 +1,1136 @@
+-- CampusGreen Supabase Schema & Storage Configuration
+
+-- 1. PROFILES TABLE
+create table if not exists public.profiles (
+  id text primary key,
+  email text,
+  full_name text not null default 'Campus Student',
+  degree_program text default 'BS Tourism Management',
+  year_level text default '3rd Year',
+  campus text default 'Ateneo de Naga University',
+  avatar_url text,
+  preferred_meetup_spot text default 'Alingal Hall (Tourism Lobby)',
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+alter table public.profiles enable row level security;
+
+-- Permissive policy for demo speed & accessibility
+drop policy if exists "Allow all operations for demo profiles" on public.profiles;
+create policy "Allow all operations for demo profiles"
+on public.profiles for all
+using (true)
+with check (true);
+
+-- Default Demo Profile
+insert into public.profiles (id, email, full_name, degree_program, year_level, campus, avatar_url, preferred_meetup_spot)
+values (
+  'user_maria_santos',
+  'maria.santos@adnu.edu.ph',
+  'Maria Santos',
+  'BS Tourism Management',
+  '3rd Year',
+  'Ateneo de Naga University',
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+  'Alingal Hall (Tourism Lobby)'
+) on conflict (id) do nothing;
+
+-- 2. ITEMS TABLE
+create table if not exists public.items (
+  id text primary key,
+  title text not null,
+  description text default '',
+  price numeric,
+  trade_type text not null default 'buy',
+  category text not null,
+  condition text not null,
+  course_tag text,
+  year_level text,
+  campus text not null default 'Ateneo de Naga University',
+  safe_meetup_spot text not null default 'Main Library Ground Floor',
+  seller_id text,
+  seller_name text not null default 'Campus Student',
+  seller_rating numeric default 5.0,
+  seller_year text default 'Verified Student',
+  is_verified_student boolean default true,
+  seller_avatar_uri text,
+  is_reserved boolean default false,
+  is_urgent boolean default false,
+  bump_count integer default 0,
+  last_bumped_at text,
+  views_count integer default 0,
+  inquiries_count integer default 0,
+  status text not null default 'active',
+  created_at text not null default 'Just now',
+  image_url text,
+  photos jsonb default '[]'::jsonb,
+  estimated_co2_saved_kg numeric default 3.5
+);
+
+alter table public.items enable row level security;
+
+-- Permissive policy for demo speed & accessibility
+drop policy if exists "Allow all operations for demo items" on public.items;
+create policy "Allow all operations for demo items"
+on public.items for all
+using (true)
+with check (true);
+
+-- 3. STORAGE BUCKET & POLICIES (product-items)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('product-items', 'product-items', true, 52428800, null)
+on conflict (id) do update set public = true;
+
+drop policy if exists "Public Access product-items" on storage.objects;
+create policy "Public Access product-items"
+on storage.objects for select
+using (bucket_id = 'product-items');
+
+drop policy if exists "Public Insert product-items" on storage.objects;
+create policy "Public Insert product-items"
+on storage.objects for insert
+with check (bucket_id = 'product-items');
+
+drop policy if exists "Public Update product-items" on storage.objects;
+create policy "Public Update product-items"
+on storage.objects for update
+using (bucket_id = 'product-items');
+
+drop policy if exists "Public Delete product-items" on storage.objects;
+create policy "Public Delete product-items"
+on storage.objects for delete
+using (bucket_id = 'product-items');
+
+-- 4. CHAT CONVERSATIONS TABLE
+create table if not exists public.chat_conversations (
+  id text primary key,
+  item_id text not null references public.items(id) on delete cascade,
+  user_id text not null default 'user_active_student',
+  seller_name text not null default 'Campus Student',
+  seller_year text default 'Verified Student',
+  item_title text not null default 'Marketplace Item',
+  price numeric,
+  trade_type text not null default 'buy',
+  last_message text default '',
+  timestamp text default 'Just now',
+  unread_count integer default 0,
+  safe_meetup_spot text default 'Main Library Ground Floor',
+  seller_avatar_uri text,
+  updated_at timestamptz default now()
+);
+
+alter table public.chat_conversations enable row level security;
+drop policy if exists "Allow all operations for demo chat_conversations" on public.chat_conversations;
+create policy "Allow all operations for demo chat_conversations"
+on public.chat_conversations for all using (true) with check (true);
+
+-- 5. CHAT MESSAGES TABLE
+create table if not exists public.chat_messages (
+  id text primary key,
+  conversation_id text,
+  item_id text not null references public.items(id) on delete cascade,
+  sender text not null, -- 'me' | 'seller' | 'system'
+  text text,
+  image_uri text,
+  timestamp text default 'Just now',
+  created_at timestamptz default now()
+);
+
+alter table public.chat_messages enable row level security;
+drop policy if exists "Allow all operations for demo chat_messages" on public.chat_messages;
+create policy "Allow all operations for demo chat_messages"
+on public.chat_messages for all using (true) with check (true);
+
+-- 6. BASKET ITEMS TABLE
+create table if not exists public.basket_items (
+  id text primary key,
+  user_id text not null default 'user_active_student',
+  item_id text not null references public.items(id) on delete cascade,
+  quantity integer not null default 1,
+  created_at timestamptz default now()
+);
+
+alter table public.basket_items enable row level security;
+drop policy if exists "Allow all operations for demo basket_items" on public.basket_items;
+create policy "Allow all operations for demo basket_items"
+on public.basket_items for all using (true) with check (true);
+
+-- 7. ORDERS TABLE (Student Purchases)
+create table if not exists public.orders (
+  id text primary key,
+  item_id text references public.items(id) on delete set null,
+  user_id text not null default 'user_active_student',
+  title text not null,
+  price numeric not null default 0,
+  seller_name text default 'Campus Student',
+  safe_meetup_spot text default 'Main Library Ground Floor',
+  escrow_status text default 'in_escrow',
+  reference_code text not null,
+  channel text default 'gcash',
+  created_at timestamptz default now()
+);
+
+alter table public.orders enable row level security;
+drop policy if exists "Allow all operations for demo orders" on public.orders;
+create policy "Allow all operations for demo orders"
+on public.orders for all using (true) with check (true);
+
+-- 8. TRANSACTIONS TABLE (Escrow Wallet Ledger)
+create table if not exists public.transactions (
+  id text primary key,
+  user_id text not null default 'user_active_student',
+  type text not null, -- 'incoming_escrow' | 'escrow_release' | 'cash_out'
+  title text not null,
+  amount numeric not null,
+  date text default 'Just now',
+  status text not null default 'completed',
+  reference_code text not null,
+  channel text,
+  counterpart_name text,
+  notes text,
+  created_at timestamptz default now()
+);
+
+alter table public.transactions enable row level security;
+drop policy if exists "Allow all operations for demo transactions" on public.transactions;
+create policy "Allow all operations for demo transactions"
+on public.transactions for all using (true) with check (true);
+
+-- 9. INITIAL SEED ITEMS (24 items)
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '1',
+    'AdNU BS Tourism Corporate Blazer & Scarf Set (Size M)',
+    'Official departmental corporate blazer and silk neck scarf. Worn during airline customer service and airport practicum semester. Freshly dry-cleaned with gold college buttons intact.',
+    450,
+    'buy',
+    'Uniforms & Scrubs',
+    'Like New',
+    'BS Tourism Management',
+    '2nd Year',
+    'Ateneo de Naga University',
+    'Alingal Hall Tourism Lobby',
+    'Maria Santos',
+    4.9,
+    '3rd Year BSTM',
+    true,
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+    false,
+    true,
+    2,
+    NULL,
+    245,
+    18,
+    'active',
+    '15m ago',
+    'https://images.unsplash.com/photo-1585240975858-7264fd020798?w=800&q=80',
+    '[{"id":"p1","label":"Blazer & Scarf Set","iconName":"shirt-outline","uri":"https://images.unsplash.com/photo-1585240975858-7264fd020798?w=800&q=80"},{"id":"p2","label":"Corporate Inner Blouse","iconName":"pricetag-outline","uri":"https://images.unsplash.com/photo-1614786269829-d24616faf56d?w=800&q=80"},{"id":"p3","label":"Fabric & Gold Buttons","iconName":"cut-outline","uri":"https://images.unsplash.com/photo-1696960190591-60d693f4d50d?w=800&q=80"},{"id":"p4","label":"Neck Scarf Knot Detail","iconName":"shield-checkmark-outline","uri":"https://images.unsplash.com/photo-1665224752136-4dbe2dfc8195?w=800&q=80"}]'::jsonb,
+    4.5
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    'user_item_2',
+    'Philippine Tourism Geography & Destination Planning',
+    'Essential reference textbook for Tour Guiding and Domestic Tourism Planning. Full-color regional travel maps, festival itineraries, and Bicol destination case studies included.',
+    550,
+    'buy',
+    'Textbooks & Reviewers',
+    'Like New',
+    'BS Tourism Management',
+    '3rd Year',
+    'Ateneo de Naga University',
+    'Alingal Hall Tourism Lobby',
+    'Maria Santos',
+    4.9,
+    '3rd Year BSTM',
+    true,
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+    false,
+    false,
+    1,
+    NULL,
+    168,
+    9,
+    'active',
+    '2h ago',
+    'https://images.unsplash.com/photo-1479232284091-c8829ec114ad?w=800&q=80',
+    '[{"id":"p1","label":"Front Cover & Maps","iconName":"book-outline","uri":"https://images.unsplash.com/photo-1479232284091-c8829ec114ad?w=800&q=80"},{"id":"p2","label":"Regional Itineraries","iconName":"document-text-outline","uri":"https://images.unsplash.com/photo-1547815749-838c83787de2?w=800&q=80"}]'::jsonb,
+    6.2
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    'user_item_3',
+    '20-Inch Hard-Shell Cabin Luggage (Study Tour & Practicum)',
+    'Durable 360-degree dual spinner wheels, lightweight polycarbonate shell, and TSA-compliant combination lock. Used during domestic flight practicum and regional study tours.',
+    1450,
+    'buy',
+    'Tools & Lab Gear',
+    'Good',
+    'BS Tourism Management',
+    'All Years',
+    'Ateneo de Naga University',
+    'Alingal Hall Tourism Lobby',
+    'Maria Santos',
+    4.9,
+    '3rd Year BSTM',
+    true,
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+    false,
+    false,
+    3,
+    NULL,
+    412,
+    31,
+    'sold',
+    '3d ago',
+    'https://images.unsplash.com/photo-1502301197179-65228ab57f78?w=800&q=80',
+    '[{"id":"p1","label":"Luggage & Packing Layout","iconName":"briefcase-outline","uri":"https://images.unsplash.com/photo-1502301197179-65228ab57f78?w=800&q=80"},{"id":"p2","label":"Hard-Shell Exterior & Wheels","iconName":"navigate-outline","uri":"https://images.unsplash.com/photo-1670888664952-efff442ec0d2?w=800&q=80"}]'::jsonb,
+    9.4
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '2',
+    'Tour Guiding Portable Voice Amplifier & Wireless Mic Kit',
+    'Rechargeable portable waist amplifier with headset microphone. Crystal clear sound for campus tour guiding, field practicum, and presentation speaking. Includes AUX cord and charging adapter.',
+    750,
+    'buy',
+    'Tools & Lab Gear',
+    'Like New',
+    'BS Tourism Management',
+    '3rd Year',
+    'Ateneo de Naga University',
+    'Alingal Hall Tourism Lobby',
+    'Kenzo Alcantara',
+    5,
+    '4th Year BSTM',
+    true,
+    'https://images.unsplash.com/photo-1492462543947-040389c4a66c?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '45m ago',
+    'https://images.unsplash.com/photo-1517816428104-797678c7cf0c?w=800&q=80',
+    '[{"id":"p1","label":"Microphone & Amplifier Unit","iconName":"mic-outline","uri":"https://images.unsplash.com/photo-1517816428104-797678c7cf0c?w=800&q=80"},{"id":"p2","label":"Headset & Waist Strap","iconName":"headset-outline","uri":"https://images.unsplash.com/photo-1590658268037-6bf12165a8df?w=800&q=80"},{"id":"p3","label":"Volume & Echo Controls","iconName":"options-outline","uri":"https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=800&q=80"}]'::jsonb,
+    2.1
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '3',
+    'Littmann Classic III Stethoscope + Diagnostic LED Penlight',
+    'Authentic 3M Littmann Classic III acoustic stethoscope in Caribbean Blue with dual tunable diaphragm. Comes with pupil gauge LED penlight and spare soft-sealing eartips. Sanitized and tested for hospital duty.',
+    1800,
+    'buy',
+    'Tools & Lab Gear',
+    'Like New',
+    'BS Nursing',
+    '2nd - 4th Year',
+    'Ateneo de Naga University',
+    'Nursing Skills Lab Entrance',
+    'Chloe Bautista',
+    4.9,
+    '4th Year BSN',
+    true,
+    'https://images.unsplash.com/photo-1594824813576-905187e1488c?w=400&q=80',
+    false,
+    true,
+    1,
+    NULL,
+    310,
+    14,
+    'active',
+    '1h ago',
+    'https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&q=80',
+    '[{"id":"p1","label":"Stethoscope & Chestpiece","iconName":"pulse-outline","uri":"https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=800&q=80"},{"id":"p2","label":"Tunable Diaphragm","iconName":"disc-outline","uri":"https://images.unsplash.com/photo-1584515979956-d9f6e5d09982?w=800&q=80"},{"id":"p3","label":"Medical Penlight & Pouch","iconName":"flash-outline","uri":"https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=800&q=80"}]'::jsonb,
+    3.8
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '4',
+    'Drafting Board (24x36) with Rotring T-Square',
+    'Heavy-duty magnetic drafting board with carry handle. Smooth surface with no deep scratches. Looking to swap for a working adjustable LED desk study lamp.',
+    NULL,
+    'swap',
+    'Tools & Lab Gear',
+    'Good',
+    'BS Architecture',
+    '1st - 2nd Year',
+    'Univ. of Nueva Caceres',
+    'EA Building Security Guard Post',
+    'Paolo Reyes',
+    4.9,
+    '3rd Year Arch',
+    true,
+    'https://images.unsplash.com/photo-1680525021501-ddea41969892?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '2h ago',
+    'https://images.unsplash.com/photo-1603901622056-0a5bee231395?w=800&q=80',
+    '[{"id":"p1","label":"Full Board & T-Square","iconName":"easel-outline","uri":"https://images.unsplash.com/photo-1603901622056-0a5bee231395?w=800&q=80"},{"id":"p2","label":"Rotring Ruler Edge","iconName":"pencil-outline","uri":"https://images.unsplash.com/photo-1542621334-a254cf47733d?w=800&q=80"},{"id":"p3","label":"Magnetic Clamps","iconName":"attach-outline","uri":"https://images.unsplash.com/photo-1610650394144-a778795cf585?w=800&q=80"}]'::jsonb,
+    8.6
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '5',
+    'Campbell Biology (11th Edition) Global Book',
+    'Hardcover edition with all chapter diagrams intact. Crisp binding with slight highlighting on genetics chapters. Essential for biological science and pre-med majors.',
+    650,
+    'buy',
+    'Textbooks & Reviewers',
+    'Well-Loved',
+    'BS Biology',
+    '1st Year',
+    'Ateneo de Naga University',
+    'SciTech Building Bench 3',
+    'Jasmine Cruz',
+    5,
+    'Graduating Bio',
+    true,
+    'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '3h ago',
+    'https://images.unsplash.com/photo-1532012197267-da84d127e765?w=800&q=80',
+    '[{"id":"p1","label":"Hardcover Front","iconName":"book-outline","uri":"https://images.unsplash.com/photo-1532012197267-da84d127e765?w=800&q=80"},{"id":"p2","label":"Binding & Spine","iconName":"bookmarks-outline","uri":"https://images.unsplash.com/photo-1530026186672-2cd00ffc50fe?w=800&q=80"}]'::jsonb,
+    5.4
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '6',
+    'Casio fx-991EX ClassWiz Scientific Calculator',
+    'Official PRC board-exam allowed non-programmable calculator. High-resolution natural textbook display with QR code function, matrix operations, and equation solver. Comes with original snap-on hard case.',
+    850,
+    'buy',
+    'Tools & Lab Gear',
+    'Like New',
+    'BS Civil Engineering',
+    'All Years',
+    'Univ. of Nueva Caceres',
+    'Engineering Labs Lobby',
+    'Renz Villafuerte',
+    4.8,
+    '4th Year BSCE',
+    true,
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80',
+    false,
+    false,
+    1,
+    NULL,
+    189,
+    11,
+    'active',
+    '4h ago',
+    'https://images.unsplash.com/photo-1611125832047-1d7ad1e8e485?w=800&q=80',
+    '[{"id":"p1","label":"Calculator Display & Keypad","iconName":"calculator-outline","uri":"https://images.unsplash.com/photo-1611125832047-1d7ad1e8e485?w=800&q=80"},{"id":"p2","label":"Snap-On Protective Hard Case","iconName":"shield-outline","uri":"https://images.unsplash.com/photo-1587145820266-a5951ee6f620?w=800&q=80"}]'::jsonb,
+    2.3
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '7',
+    'Clip-On Study Fan + 3-Meter Surge Extension',
+    'Quiet 3-speed oscillating clip fan, perfect for dorm bunk beds. Includes safety surge-protected extension cord with individual switches.',
+    280,
+    'buy',
+    'Dorm & Room',
+    'Good',
+    'Dorm Essentials',
+    'All Years',
+    'Univ. of Nueva Caceres',
+    'University Gate 1 Guard Post',
+    'Carlo Mendoza',
+    4.9,
+    '3rd Year BSIT',
+    true,
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '5h ago',
+    'https://images.unsplash.com/photo-1565151443833-29bf2ba5dd8d?w=800&q=80',
+    '[{"id":"p1","label":"Fan & Extension Cord","iconName":"home-outline","uri":"https://images.unsplash.com/photo-1565151443833-29bf2ba5dd8d?w=800&q=80"},{"id":"p2","label":"Surge Switch Board","iconName":"flash-outline","uri":"https://images.unsplash.com/photo-1665298455913-dd43714f5ad1?w=800&q=80"}]'::jsonb,
+    6.3
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '8',
+    'Keychron K2 Wireless Mechanical Keyboard (Gateron Brown)',
+    '75% compact wireless keyboard with Bluetooth 5.1 and Type-C cable. Tactile Gateron brown switches, ideal for coding in quiet study rooms. Want to swap for an iPad folio keyboard case or drawing stylus.',
+    NULL,
+    'swap',
+    'Tech & Gadgets',
+    'Like New',
+    'BS Computer Science',
+    '2nd - 4th Year',
+    'Ateneo de Naga University',
+    'Main Library Ground Floor',
+    'Mikaela Lim',
+    5,
+    '3rd Year BSCS',
+    true,
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '6h ago',
+    'https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80',
+    '[{"id":"p1","label":"Keyboard Top View","iconName":"hardware-chip-outline","uri":"https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=800&q=80"},{"id":"p2","label":"Keycaps & Switches Profile","iconName":"key-outline","uri":"https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?w=800&q=80"}]'::jsonb,
+    4.9
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '9',
+    'Pay-It-Forward: Clinical Duty White Scrubs Set (Size S)',
+    'Two sets of sanitized white hospital duty scrubs with official nursing department patches. Free for incoming 2nd year nursing students entering hospital duties. No stains or tears.',
+    NULL,
+    'free',
+    'Uniforms & Scrubs',
+    'Good',
+    'BS Nursing',
+    '2nd Year',
+    'Ateneo de Naga University',
+    'Nursing Skills Lab Entrance',
+    'Andrea Rivera',
+    4.8,
+    '3rd Year BSN',
+    true,
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '7h ago',
+    'https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=800&q=80',
+    '[{"id":"p1","label":"Scrubs Top and Pants","iconName":"shirt-outline","uri":"https://images.unsplash.com/photo-1584982751601-97dcc096659c?w=800&q=80"},{"id":"p2","label":"Department Patch & Pockets","iconName":"medkit-outline","uri":"https://images.unsplash.com/photo-1629909613654-28e377c37b09?w=800&q=80"}]'::jsonb,
+    5.1
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '10',
+    'Conceptual Framework and Accounting Standards (Millan)',
+    'Standard reference textbook for Financial Accounting and Reporting (FAR). Clean pages, covered with plastic wrapper, and minimal pencil marks on exercise problem sets.',
+    420,
+    'buy',
+    'Textbooks & Reviewers',
+    'Like New',
+    'BS Accountancy',
+    '1st - 2nd Year',
+    'Ateneo de Naga University',
+    'Student Pavilion',
+    'Bea Soriano',
+    4.9,
+    '3rd Year BSA',
+    true,
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '8h ago',
+    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&q=80',
+    '[{"id":"p1","label":"Book Cover","iconName":"book-outline","uri":"https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&q=80"},{"id":"p2","label":"Table of Contents & Exercises","iconName":"document-text-outline","uri":"https://images.unsplash.com/photo-1588580000645-4562a6d2c839?w=800&q=80"}]'::jsonb,
+    4.1
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '11',
+    'Aluminum Ergonomic Laptop Stand + 6-in-1 USB-C Hub',
+    'Collapsible ventilated aluminum stand that elevates laptops for better posture during long programming sessions. Includes a 6-in-1 multi-port adapter with 4K HDMI, 3x USB 3.0, and PD fast charging.',
+    600,
+    'buy',
+    'Tech & Gadgets',
+    'Like New',
+    'BS Information Technology',
+    'All Years',
+    'Univ. of Nueva Caceres',
+    'University Gate 1 Guard Post',
+    'Dave Ramos',
+    5,
+    '4th Year BSIT',
+    true,
+    'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '9h ago',
+    'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=800&q=80',
+    '[{"id":"p1","label":"Laptop Stand Folded & Elevated","iconName":"laptop-outline","uri":"https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?w=800&q=80"},{"id":"p2","label":"USB-C Hub Ports","iconName":"hardware-chip-outline","uri":"https://images.unsplash.com/photo-1544652478-6653e09f18a2?w=800&q=80"}]'::jsonb,
+    3.4
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '12',
+    'Pay-It-Forward: Chemistry Laboratory Glassware & Safety Goggles Set',
+    'Borosilicate glass beakers (250ml & 500ml), graduated cylinder, test tube rack, and scratch-free chemical splash safety goggles. Given away after finishing Organic Chemistry lab.',
+    NULL,
+    'free',
+    'Tools & Lab Gear',
+    'Good',
+    'BS Biology',
+    '1st - 2nd Year',
+    'Ateneo de Naga University',
+    'SciTech Building Bench 3',
+    'Jethro Tan',
+    4.9,
+    '3rd Year Bio',
+    true,
+    'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '11h ago',
+    'https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=800&q=80',
+    '[{"id":"p1","label":"Glassware & Beakers Set","iconName":"flask-outline","uri":"https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=800&q=80"},{"id":"p2","label":"Safety Eye Goggles","iconName":"glasses-outline","uri":"https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&q=80"}]'::jsonb,
+    4.8
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '13',
+    'Staedtler Technical Drawing Fineliner Pens & Compass Set',
+    'Set of pigment liner technical pens (0.1, 0.3, 0.5, 0.8) plus precision quick-release spring bow compass. Seeking to swap for watercolor paper blocks or gouache paint sets.',
+    NULL,
+    'swap',
+    'Tools & Lab Gear',
+    'Like New',
+    'BS Architecture',
+    '1st - 3rd Year',
+    'Univ. of Nueva Caceres',
+    'EA Building Security Guard Post',
+    'Kimberly Dee',
+    4.7,
+    '2nd Year Arch',
+    true,
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '12h ago',
+    'https://images.unsplash.com/photo-1585336261026-77cc7c balance?w=800&q=80',
+    '[{"id":"p1","label":"Fineliners & Compass Case","iconName":"pencil-outline","uri":"https://images.unsplash.com/photo-1585336261026-77cc7c balance?w=800&q=80"},{"id":"p2","label":"Tip Sizes & Line Samples","iconName":"brush-outline","uri":"https://images.unsplash.com/photo-1542621334-a254cf47733d?w=800&q=80"}]'::jsonb,
+    2.5
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '14',
+    'Hydro Flask 32oz Wide Mouth Water Bottle (Olive Green)',
+    'Double-wall vacuum insulated stainless steel bottle. Keeps iced water freezing cold for up to 24 hours in hot campus lecture halls. Freshly sanitized with silicone boot included.',
+    800,
+    'buy',
+    'Dorm & Room',
+    'Like New',
+    'General Campus',
+    'All Years',
+    'Ateneo de Naga University',
+    'Main Library Ground Floor',
+    'Sam Valenzuela',
+    4.9,
+    '2nd Year BSBA',
+    true,
+    'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '14h ago',
+    'https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=800&q=80',
+    '[{"id":"p1","label":"Hydro Flask with Silicone Boot","iconName":"water-outline","uri":"https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=800&q=80"},{"id":"p2","label":"Wide Mouth Cap & Handle","iconName":"finger-print-outline","uri":"https://images.unsplash.com/photo-1544816155-12df9643f363?w=800&q=80"}]'::jsonb,
+    7.2
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '15',
+    'Anker 20,000mAh 20W Fast Charging Power Bank',
+    'High capacity portable charger with dual USB-A and USB-C Power Delivery ports. Can recharge a smartphone 4 to 5 times. Reliable backup for long campus days with brownouts.',
+    950,
+    'buy',
+    'Tech & Gadgets',
+    'Like New',
+    'General Campus',
+    'All Years',
+    'Univ. of Nueva Caceres',
+    'University Gate 1 Guard Post',
+    'Marco Dizon',
+    5,
+    '3rd Year BSIT',
+    true,
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '16h ago',
+    'https://images.unsplash.com/photo-1609592426867-0e6259020465?w=800&q=80',
+    '[{"id":"p1","label":"Power Bank Body & Ports","iconName":"battery-charging-outline","uri":"https://images.unsplash.com/photo-1609592426867-0e6259020465?w=800&q=80"},{"id":"p2","label":"LED Battery Indicator","iconName":"flash-outline","uri":"https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=800&q=80"}]'::jsonb,
+    4.2
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '16',
+    'Pay-It-Forward: College Physics Reviewer & Formula Flashcards',
+    'Compiled review notes on Mechanics, Statics of Rigid Bodies, and Thermodynamics, plus ring-bound formula flashcards for midterms and finals review.',
+    NULL,
+    'free',
+    'Textbooks & Reviewers',
+    'Good',
+    'BS Civil Engineering',
+    '1st - 2nd Year',
+    'Univ. of Nueva Caceres',
+    'Engineering Labs Lobby',
+    'Kevin Flores',
+    4.8,
+    '4th Year BSCE',
+    true,
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '18h ago',
+    'https://images.unsplash.com/photo-1661732017120-f487ae211533?w=800&q=80',
+    '[{"id":"p1","label":"Physics Binder & Notes","iconName":"book-outline","uri":"https://images.unsplash.com/photo-1661732017120-f487ae211533?w=800&q=80"},{"id":"p2","label":"Formula Flashcards","iconName":"albums-outline","uri":"https://images.unsplash.com/photo-1622304058572-768d7c4525da?w=800&q=80"}]'::jsonb,
+    3.1
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '17',
+    'AdNU Official Washable College Polo Uniform (Unisex L)',
+    'Clean, crisp white campus uniform with embroidered official university crest. High quality peach-twill fabric that is wrinkle-resistant and breathable.',
+    250,
+    'buy',
+    'Uniforms & Scrubs',
+    'Like New',
+    'General Campus',
+    'All Years',
+    'Ateneo de Naga University',
+    'Student Pavilion',
+    'Joshua Perez',
+    4.9,
+    '2nd Year BSBA',
+    true,
+    'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '20h ago',
+    'https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&q=80',
+    '[{"id":"p1","label":"College Polo Front","iconName":"shirt-outline","uri":"https://images.unsplash.com/photo-1602810318383-e386cc2a3ccf?w=800&q=80"},{"id":"p2","label":"Embroidered Crest & Collar","iconName":"ribbon-outline","uri":"https://images.unsplash.com/photo-1614786269829-d24616faf56d?w=800&q=80"}]'::jsonb,
+    3.6
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '18',
+    'Baseus LED Magnetic Desk Reading / Bed Headboard Lamp',
+    'Rechargeable warm/cool white touch-dimmable light bar with magnetic base. Easily sticks to metal dorm bunk bed frames or study desks without taking up desk space.',
+    380,
+    'buy',
+    'Dorm & Room',
+    'Like New',
+    'Dorm Essentials',
+    'All Years',
+    'Ateneo de Naga University',
+    'Main Library Ground Floor',
+    'Elena Gomez',
+    5,
+    '3rd Year BSN',
+    true,
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '1d ago',
+    'https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=800&q=80',
+    '[{"id":"p1","label":"LED Lamp Mounted on Desk","iconName":"sunny-outline","uri":"https://images.unsplash.com/photo-1513506003901-1e6a229e2d15?w=800&q=80"},{"id":"p2","label":"Magnetic Swivel Base","iconName":"attach-outline","uri":"https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=800&q=80"}]'::jsonb,
+    2.8
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '19',
+    'Pay-It-Forward: Philippine Heritage & Cultural Tourism Reviewers',
+    'Free compiled lecture summaries, UNESCO heritage site notes, and local Bicol cultural festival review materials for underclassmen.',
+    NULL,
+    'free',
+    'Textbooks & Reviewers',
+    'Good',
+    'BS Tourism Management',
+    '2nd Year',
+    'Ateneo de Naga University',
+    'Alingal Hall Tourism Lobby',
+    'Bea Dimaculangan',
+    4.8,
+    '2nd Year BSTM',
+    true,
+    'https://images.unsplash.com/photo-1765650113773-0752556dcea0?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '1d ago',
+    'https://images.unsplash.com/photo-1661732017120-f487ae211533?w=800&q=80',
+    '[{"id":"p1","label":"Heritage Notes Binder","iconName":"book-outline","uri":"https://images.unsplash.com/photo-1661732017120-f487ae211533?w=800&q=80"},{"id":"p2","label":"Festival & Culture Summaries","iconName":"document-text-outline","uri":"https://images.unsplash.com/photo-1622304058572-768d7c4525da?w=800&q=80"}]'::jsonb,
+    3.5
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '20',
+    'Swap: Principles of Macroeconomics (Mankiw) for Business Law Reviewer',
+    'Original Principles of Macroeconomics book by N. Gregory Mankiw. Clean pages with minimal pencil underlines. Want to swap for Obligations & Contracts or Partnership & Corporation Law reviewer.',
+    NULL,
+    'swap',
+    'Textbooks & Reviewers',
+    'Good',
+    'BS Business Administration',
+    '2nd Year',
+    'Univ. of Nueva Caceres',
+    'Student Pavilion',
+    'Carlo Aquino',
+    4.9,
+    '2nd Year BSBA',
+    true,
+    'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '1d ago',
+    'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&q=80',
+    '[{"id":"p1","label":"Macroeconomics Cover","iconName":"book-outline","uri":"https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=800&q=80"},{"id":"p2","label":"Economic Graphs & Charts","iconName":"bar-chart-outline","uri":"https://images.unsplash.com/photo-1551836022-d5d88e9218df?w=800&q=80"}]'::jsonb,
+    4.5
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '21',
+    'Water-Resistant College Backpack with 15.6" Padded Laptop Sleeve',
+    'Ergonomic padded shoulder straps, hidden anti-theft back pocket, and waterproof fabric. Thickly cushioned laptop compartment fits up to 15.6-inch devices plus multiple heavy binders.',
+    520,
+    'buy',
+    'Tools & Lab Gear',
+    'Like New',
+    'General Campus',
+    'All Years',
+    'Ateneo de Naga University',
+    'Student Pavilion',
+    'Denise Ocampo',
+    4.8,
+    '3rd Year BSTM',
+    true,
+    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '2d ago',
+    'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80',
+    '[{"id":"p1","label":"Backpack Front & Pockets","iconName":"briefcase-outline","uri":"https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=800&q=80"},{"id":"p2","label":"Padded Laptop Sleeve","iconName":"laptop-outline","uri":"https://images.unsplash.com/photo-1622560480605-d83c853bc5c3?w=800&q=80"}]'::jsonb,
+    6.8
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+
+INSERT INTO public.items (
+    id, title, description, price, trade_type, category, condition, course_tag, year_level,
+    campus, safe_meetup_spot, seller_name, seller_rating, seller_year, is_verified_student,
+    seller_avatar_uri, is_reserved, is_urgent, bump_count, last_bumped_at, views_count,
+    inquiries_count, status, created_at, image_url, photos, estimated_co2_saved_kg
+  ) VALUES (
+    '22',
+    'Dissection Kit (Stainless Steel 11-Piece) with Zippered Case',
+    'Complete surgical-grade stainless steel instrument set for Zoology and Comparative Anatomy lab courses: scalpel handle, spare sterile blades, curved/straight forceps, tease needles, and dissecting scissors.',
+    320,
+    'buy',
+    'Tools & Lab Gear',
+    'Like New',
+    'BS Biology',
+    '1st - 2nd Year',
+    'Ateneo de Naga University',
+    'SciTech Building Bench 3',
+    'Angela Nieves',
+    4.9,
+    '2nd Year Bio',
+    true,
+    'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=400&q=80',
+    false,
+    false,
+    0,
+    NULL,
+    0,
+    0,
+    'active',
+    '2d ago',
+    'https://images.unsplash.com/photo-1583912267670-6575ad373676?w=800&q=80',
+    '[{"id":"p1","label":"Dissecting Tools in Leatherette Case","iconName":"cut-outline","uri":"https://images.unsplash.com/photo-1583912267670-6575ad373676?w=800&q=80"},{"id":"p2","label":"Scalpels, Forceps and Scissors","iconName":"construct-outline","uri":"https://images.unsplash.com/photo-1584017911766-d451b3d0e843?w=800&q=80"}]'::jsonb,
+    2.9
+  ) ON CONFLICT (id) DO UPDATE SET
+    title = EXCLUDED.title,
+    price = EXCLUDED.price,
+    image_url = EXCLUDED.image_url,
+    description = EXCLUDED.description;
+

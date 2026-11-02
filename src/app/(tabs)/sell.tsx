@@ -21,6 +21,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useItems } from '@/context/items-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { uploadImageToSupabase } from '@/lib/supabase';
 import {
   Condition,
   ItemCategory,
@@ -213,17 +215,37 @@ export default function SellScreen() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
+    try {
       itemCounterRef.current += 1;
-      const generatedPhotos: ItemPhoto[] = photos.map((p, i) => ({
-        id: p.id,
-        label: p.label || (i === 0 ? 'Main View' : `Angle ${i + 1}`),
-        iconName: 'cube-outline',
-        uri: p.uri,
-      }));
+
+      // Upload photos to Supabase Storage bucket 'product-items'
+      const uploadedPhotos: ItemPhoto[] = [];
+      for (let i = 0; i < photos.length; i++) {
+        const p = photos[i];
+        const publicUrl = await uploadImageToSupabase(p.uri, 'listings');
+        uploadedPhotos.push({
+          id: p.id,
+          label: p.label || (i === 0 ? 'Main View' : `Angle ${i + 1}`),
+          iconName: 'cube-outline',
+          uri: publicUrl,
+        });
+      }
+
+      const coverUrl = uploadedPhotos.length > 0 ? uploadedPhotos[0].uri : undefined;
+
+      let activeSellerName = 'Student Seller';
+      let activeSellerYear = 'Verified Student';
+      try {
+        const local = await AsyncStorage.getItem('@campusgreen_user_profile');
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (parsed.fullName) activeSellerName = parsed.fullName;
+          if (parsed.yearLevel) activeSellerYear = parsed.yearLevel;
+        }
+      } catch {}
 
       const newItem: MarketplaceItem = {
-        id: `user_item_${itemCounterRef.current}`,
+        id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         title: title.trim(),
         price: tradeType === 'buy' ? Number(price) : null,
         tradeType: tradeType!,
@@ -233,13 +255,13 @@ export default function SellScreen() {
         yearLevel: yearLevel || undefined,
         campus,
         safeMeetupSpot: safeMeetupSpot.trim(),
-        sellerName: 'You',
+        sellerName: activeSellerName,
         sellerRating: 5.0,
-        sellerYear: 'Verified Student',
+        sellerYear: activeSellerYear,
         isVerifiedStudent: true,
         createdAt: 'Just now',
-        imageUrl: photos.length > 0 ? photos[0].uri : undefined,
-        photos: generatedPhotos.length > 0 ? generatedPhotos : undefined,
+        imageUrl: coverUrl,
+        photos: uploadedPhotos.length > 0 ? uploadedPhotos : undefined,
         description:
           description.trim() ||
           (tradeType === 'swap' && swapWishlist
@@ -247,12 +269,17 @@ export default function SellScreen() {
             : 'Pre-loved campus gear in great condition.'),
         estimatedCo2SavedKg: estimatedCo2,
       };
+      (newItem as any).isOwner = true;
 
-      addItem(newItem);
+      await addItem(newItem);
       setIsSubmitting(false);
       setCreatedItem(newItem);
       setSuccessModalVisible(true);
-    }, 400);
+    } catch (err) {
+      console.warn('Publish error:', err);
+      setIsSubmitting(false);
+      Alert.alert('Listing Error', 'Failed to publish listing. Please try again.');
+    }
   };
 
   const handleResetForm = () => {

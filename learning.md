@@ -414,6 +414,42 @@ This document captures project-specific design standards, user preferences, and 
   - Indicate active filtering states with a distinct active accent background and subtle corner dot without decorative badge fluff.
   - Provide a scrollable modal sheet displaying Deal Types (`Buy`, `Swap Zone`, `Freebies`), Categories (`Textbooks`, `Uniforms`, etc.), and Academic Courses/Programs (`BS Tourism Management`, `BS Accountancy`, `BS Nursing`, etc.) with clean slate defaults, a Reset button, and an Apply CTA.
 
+### 25. Supabase Client Integration, Storage Bucket & Schema Management
+- **Client-Side Expo Environment Variables Invariant**:
+  - In Expo / React Native applications, any environment variable needed by client-side code must start with the `EXPO_PUBLIC_` prefix (e.g. `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`).
+  - Without `EXPO_PUBLIC_`, Metro strips environment variables from the bundle, causing `process.env.VARIABLE` to resolve to `undefined` at runtime.
+- **Backendless Architecture via Supabase PostgREST & Storage**:
+  - Never embed direct PostgreSQL connection strings (`postgres://...` / port 5432) in a mobile client bundle.
+  - Connect client-side via `@supabase/supabase-js` using the project HTTPS URL and publishable `anon` key, persisting auth sessions with `@react-native-async-storage/async-storage`.
+- **Image Uploading to Supabase Storage (`product-items`)**:
+  - On React Native/Expo, local file URIs (from `expo-image-picker`) can be fetched via `fetch(uri)` and converted to `blob` before calling `supabase.storage.from('product-items').upload(...)`.
+  - Always generate unique timestamped filenames (`listings/${Date.now()}_${random}.${ext}`) and resolve the public CDN URL via `.getPublicUrl(data.path)`.
+  - Include graceful fallbacks so an offline or storage failure does not block the user from posting their item.
+- **Optimistic State with Asynchronous Sync**:
+  - For rapid demo performance, update local React state immediately on user action (`addItem`, `bumpItem`, `toggleUrgent`, `setItemStatus`, `deleteItem`), then trigger asynchronous PostgREST mutations in the background.
+  - On app launch, query Supabase asynchronously; if rows exist in Supabase, update the feed; otherwise gracefully display initial pre-seeded items so the app remains instantly interactive without UI flash or layout shift.
+- **React 19 / ESLint `react-hooks/set-state-in-effect` Guard**:
+  - Do NOT call synchronous `setState` inside `useEffect` bodies. Always attach state updates inside `.then()` or `.finally()` asynchronous callbacks or event handlers to avoid cascading render lint errors.
+
+### 27. Full Supabase Persistence for Chat, Basket, Orders & Escrow
+- **Supabase-Backed Chat Architecture**:
+  - `chat_conversations` table stores `id`, `item_id`, `buyer_id`, `buyer_name`, `seller_id`, `seller_name`, `last_message`, `last_message_at`, `unread_count`.
+  - `chat_messages` table stores `id`, `conversation_id`, `sender_id`, `sender_name`, `text`, `type`, `created_at`, `status`.
+  - In `ChatContext`, conversations and messages load asynchronously from Supabase while maintaining optimistic in-memory dispatching for instantaneous chat interaction.
+  - Sending messages and action buttons (e.g. Meetup Proposal, Location Pin, Payment Prompts) persist directly to Supabase PostgREST tables.
+- **Supabase-Backed Basket Architecture**:
+  - `basket_items` table stores `id`, `user_id`, `item_id`, `title`, `price`, `image_url`, `condition`, `category`, `deal_type`, `seller_name`, `meetup_spot`, `created_at`.
+  - `useBasket()` provides instant reactive updates to the basket badge and screen, while seamlessly executing `saveBasketItemToSupabase()` and `deleteBasketItemFromSupabase()`.
+  - Add to Basket button in Item Detail docks (`item/[id].tsx`) toggles membership dynamically with checkmark and basket navigation feedback.
+- **Supabase-Backed Orders & Escrow Transactions**:
+  - `orders` table stores confirmed student purchases with item details, payment method, escrow code, meetup status, and timestamps.
+  - `transactions` table records all credit/debit movements against the student's campus e-wallet.
+  - When completing checkout in `payment/[id].tsx`, `saveOrderToSupabase()` and `saveTransactionToSupabase()` write confirmed orders and escrow holds directly to Supabase.
+  - The Profile screen automatically loads user purchases from Supabase on mount via `fetchOrdersFromSupabase()`.
+
+
+
+
 
 
 

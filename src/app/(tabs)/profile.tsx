@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,14 @@ import { useThemeContext } from '@/context/theme-context';
 import { useItems } from '@/context/items-context';
 import { INITIAL_GREEN_IMPACT } from '@/data/mock-items';
 import { EscrowTransaction, MarketplaceItem } from '@/types/item';
+import { uploadImageToSupabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  fetchOrdersFromSupabase,
+  fetchProfileFromSupabase,
+  formatShortName,
+  saveProfileToSupabase,
+} from '@/lib/database';
 
 const GCASH_LOGO = require('@/assets/gcash.svg');
 const MAYA_LOGO = require('@/assets/maya.svg');
@@ -120,25 +128,92 @@ export default function ProfileScreen() {
 
   // Edit Meetup Spot Modal
   const [isEditSpotModalVisible, setIsEditSpotModalVisible] = useState(false);
-  const [preferredSpot, setPreferredSpot] = useState('Alingal Hall (Tourism Lobby)');
+  const [preferredSpot, setPreferredSpot] = useState('Main Library Ground Floor');
   const [tempSpot, setTempSpot] = useState(preferredSpot);
 
-  // Student Profile Identity State
-  const [profileName, setProfileName] = useState('Maria Santos');
-  const [profileDegree, setProfileDegree] = useState('BS Tourism Management');
-  const [profileYearLevel, setProfileYearLevel] = useState('3rd Year');
-  const [profileAvatarUri, setProfileAvatarUri] = useState<string | null>(
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'
-  );
+  // Student Profile Identity State - Clean Slate for new accounts
+  const [profileName, setProfileName] = useState('New Student');
+  const [profileDegree, setProfileDegree] = useState('Select Degree Program');
+  const [profileYearLevel, setProfileYearLevel] = useState('1st Year');
+  const [profileAvatarUri, setProfileAvatarUri] = useState<string | null>(null);
 
   // Edit Profile Details Modal State
   const [isEditProfileModalVisible, setIsEditProfileModalVisible] = useState(false);
   const [tempProfileName, setTempProfileName] = useState(profileName);
   const [tempProfileDegree, setTempProfileDegree] = useState(profileDegree);
   const [tempProfileYearLevel, setTempProfileYearLevel] = useState(profileYearLevel);
-  const [tempAvatarUri, setTempAvatarUri] = useState<string | null>(
-    'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80'
-  );
+  const [tempAvatarUri, setTempAvatarUri] = useState<string | null>(null);
+
+  // Student purchases/orders backed by Supabase
+  const [studentPurchases, setStudentPurchases] = useState<any[]>([]);
+
+  // Load profile from local storage and Supabase on mount
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadActiveProfile() {
+      try {
+        // 1. Check locally saved student profile
+        const local = await AsyncStorage.getItem('@campusgreen_user_profile');
+        if (local && isMounted) {
+          const parsed = JSON.parse(local);
+          if (parsed.fullName) {
+            setProfileName(parsed.fullName);
+            setTempProfileName(parsed.fullName);
+          }
+          if (parsed.degreeProgram) {
+            setProfileDegree(parsed.degreeProgram);
+            setTempProfileDegree(parsed.degreeProgram);
+          }
+          if (parsed.yearLevel) {
+            setProfileYearLevel(parsed.yearLevel);
+            setTempProfileYearLevel(parsed.yearLevel);
+          }
+          if (parsed.avatarUrl) {
+            setProfileAvatarUri(parsed.avatarUrl);
+            setTempAvatarUri(parsed.avatarUrl);
+          }
+          if (parsed.preferredMeetupSpot) {
+            setPreferredSpot(parsed.preferredMeetupSpot);
+            setTempSpot(parsed.preferredMeetupSpot);
+          }
+        }
+
+        // 2. Fetch from Supabase
+        const p = await fetchProfileFromSupabase('user_active_student');
+        if (p && isMounted) {
+          setProfileName(p.fullName);
+          setProfileDegree(p.degreeProgram);
+          setProfileYearLevel(p.yearLevel);
+          if (p.avatarUrl) {
+            setProfileAvatarUri(p.avatarUrl);
+            setTempAvatarUri(p.avatarUrl);
+          }
+          if (p.preferredMeetupSpot) {
+            setPreferredSpot(p.preferredMeetupSpot);
+            setTempSpot(p.preferredMeetupSpot);
+          }
+          setTempProfileName(p.fullName);
+          setTempProfileDegree(p.degreeProgram);
+          setTempProfileYearLevel(p.yearLevel);
+        }
+
+        // 3. Load user orders from Supabase
+        const orders = await fetchOrdersFromSupabase('user_active_student');
+        if (orders && isMounted) {
+          setStudentPurchases(orders);
+        }
+      } catch (err) {
+        console.warn('Error loading profile:', err);
+      }
+    }
+
+    loadActiveProfile();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Profile Photo Picker Modal State (Same file picker found in sell)
   const [isPhotoPickerModalVisible, setIsPhotoPickerModalVisible] = useState(false);
@@ -150,27 +225,18 @@ export default function ProfileScreen() {
   // Action feedback toast
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  // Filter items owned by current student ('Maria Santos' or profileName or 'You')
-  const userItems = items.filter(
-    (item) => item.sellerName === profileName || item.sellerName === 'Maria Santos' || item.sellerName === 'You'
-  );
+  // Filter items owned by the current student (empty for new accounts until they post)
+  const userItems = items.filter((item) => {
+    if (!profileName || profileName === 'New Student' || profileName === 'Student') {
+      return (item as any).isOwner === true;
+    }
+    return (
+      item.sellerName.toLowerCase() === profileName.toLowerCase() ||
+      (item as any).isOwner === true
+    );
+  });
   const activeListings = userItems.filter((i) => i.status !== 'sold');
   const soldListings = userItems.filter((i) => i.status === 'sold');
-
-  // Mock student purchases (In Escrow / Completed)
-  const studentPurchases = [
-    {
-      id: 'purch_1',
-      title: 'Casio FX-991EX ClassWiz Scientific Calculator',
-      price: 850,
-      sellerName: 'Kenzo Alcantara',
-      campus: 'Ateneo de Naga University',
-      safeMeetupSpot: 'Main Library Ground Floor',
-      escrowStatus: 'in_escrow',
-      referenceCode: 'CG-ESC-749201',
-      date: 'Today, 2:15 PM',
-    },
-  ];
 
   // Handle Listing Bump
   const handleBump = (item: MarketplaceItem) => {
@@ -381,10 +447,21 @@ export default function ProfileScreen() {
   // Save new meetup spot
   const handleSaveMeetupSpot = () => {
     if (tempSpot.trim()) {
-      setPreferredSpot(tempSpot.trim());
+      const newSpot = tempSpot.trim();
+      setPreferredSpot(newSpot);
       setIsEditSpotModalVisible(false);
-      setActionFeedback('Preferred meetup spot updated.');
+      setActionFeedback('Preferred meetup spot updated & saved.');
       setTimeout(() => setActionFeedback(null), 3000);
+
+      saveProfileToSupabase({
+        id: 'user_active_student',
+        fullName: profileName,
+        degreeProgram: profileDegree,
+        yearLevel: profileYearLevel,
+        campus: 'Ateneo de Naga University',
+        avatarUrl: profileAvatarUri || undefined,
+        preferredMeetupSpot: newSpot,
+      }).catch((err) => console.warn('Supabase save spot error:', err));
     }
   };
 
@@ -459,7 +536,23 @@ export default function ProfileScreen() {
         const pickedUri = result.assets[0].uri;
         setProfileAvatarUri(pickedUri);
         setTempAvatarUri(pickedUri);
-        setActionFeedback('Profile photo updated.');
+        setActionFeedback('Uploading photo to Supabase...');
+
+        const publicUrl = await uploadImageToSupabase(pickedUri, 'avatars');
+        setProfileAvatarUri(publicUrl);
+        setTempAvatarUri(publicUrl);
+
+        saveProfileToSupabase({
+          id: 'user_active_student',
+          fullName: profileName,
+          degreeProgram: profileDegree,
+          yearLevel: profileYearLevel,
+          campus: 'Ateneo de Naga University',
+          avatarUrl: publicUrl,
+          preferredMeetupSpot: preferredSpot,
+        }).catch((err) => console.warn('Supabase save profile photo error:', err));
+
+        setActionFeedback('Profile photo updated & saved to Supabase.');
         setTimeout(() => setActionFeedback(null), 3000);
       }
     } catch {
@@ -523,13 +616,39 @@ export default function ProfileScreen() {
       Alert.alert('Name Required', 'Please enter your student name.');
       return;
     }
-    setProfileName(tempProfileName.trim());
-    setProfileDegree(tempProfileDegree.trim());
-    setProfileYearLevel(tempProfileYearLevel);
-    setProfileAvatarUri(tempAvatarUri);
+    const updatedName = tempProfileName.trim();
+    const updatedDegree = tempProfileDegree.trim();
+    const updatedYear = tempProfileYearLevel;
+    const updatedAvatar = tempAvatarUri;
+
+    setProfileName(updatedName);
+    setProfileDegree(updatedDegree);
+    setProfileYearLevel(updatedYear);
+    setProfileAvatarUri(updatedAvatar);
     setIsEditProfileModalVisible(false);
-    setActionFeedback('Student profile details updated.');
+    setActionFeedback('Student profile details updated & saved to Supabase.');
     setTimeout(() => setActionFeedback(null), 3000);
+
+    saveProfileToSupabase({
+      id: 'user_active_student',
+      fullName: updatedName,
+      degreeProgram: updatedDegree,
+      yearLevel: updatedYear,
+      campus: 'Ateneo de Naga University',
+      avatarUrl: updatedAvatar || undefined,
+      preferredMeetupSpot: preferredSpot,
+    }).catch((err) => console.warn('Supabase save profile error:', err));
+
+    AsyncStorage.setItem(
+      '@campusgreen_user_profile',
+      JSON.stringify({
+        fullName: updatedName,
+        degreeProgram: updatedDegree,
+        yearLevel: updatedYear,
+        avatarUrl: updatedAvatar,
+        preferredMeetupSpot: preferredSpot,
+      })
+    ).catch(() => {});
   };
 
   // Category Icon Resolver
@@ -583,12 +702,15 @@ export default function ProfileScreen() {
                   />
                 ) : (
                   <Text style={styles.avatarInitials}>
-                    {profileName
-                      .split(' ')
-                      .map((n) => n[0])
-                      .join('')
-                      .toUpperCase()
-                      .substring(0, 2) || 'MS'}
+                    {profileName && profileName !== 'New Student'
+                      ? profileName
+                          .split(' ')
+                          .filter(Boolean)
+                          .map((n) => n[0])
+                          .join('')
+                          .toUpperCase()
+                          .substring(0, 2) || 'ST'
+                      : 'ST'}
                   </Text>
                 )}
               </View>
@@ -606,8 +728,11 @@ export default function ProfileScreen() {
             {/* Name & Academic Meta */}
             <View style={styles.studentMeta}>
               <View style={styles.nameAndStatusRow}>
-                <Text style={[styles.studentName, { color: theme.text }]} numberOfLines={1}>
-                  {profileName}
+                <Text
+                  style={[styles.studentName, { color: theme.text }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail">
+                  {formatShortName(profileName)}
                 </Text>
                 <View style={[styles.verifiedTag, { backgroundColor: theme.badgeGreenBg }]}>
                   <Text style={[styles.verifiedTagText, { color: theme.badgeGreenText }]}>
@@ -1226,48 +1351,67 @@ export default function ProfileScreen() {
         {/* ================= 6. TAB 3: MY ORDERS & PURCHASES ================= */}
         {activeTab === 'purchases' && (
           <View style={styles.tabContentBlock}>
-            {studentPurchases.map((p) => (
+            {studentPurchases.length === 0 ? (
               <View
-                key={p.id}
                 style={[
-                  styles.purchaseCard,
+                  styles.emptyStateBox,
                   { backgroundColor: theme.surface, borderColor: theme.border },
                 ]}>
-                <View style={styles.purchaseHeader}>
-                  <View style={styles.purchaseHeaderLeft}>
-                    <Ionicons name="shield-checkmark" size={15} color={theme.primary} />
-                    <Text style={[styles.purchaseRef, { color: theme.primary }]}>
-                      {p.referenceCode}
-                    </Text>
-                  </View>
-                  <View style={[styles.inEscrowTag, { backgroundColor: theme.goldBg }]}>
-                    <Text style={[styles.inEscrowTagText, { color: theme.gold }]}>
-                      Held in Escrow
-                    </Text>
-                  </View>
-                </View>
-
-                <Text style={[styles.purchaseTitle, { color: theme.text }]}>{p.title}</Text>
-                <Text style={[styles.purchaseSeller, { color: theme.textSecondary }]}>
-                  Seller: {p.sellerName} • ₱{p.price}
+                <Ionicons name="receipt-outline" size={36} color={theme.textMuted} />
+                <Text style={[styles.emptyStateTitle, { color: theme.text }]}>No orders or purchases yet</Text>
+                <Text style={[styles.emptyStateSubtitle, { color: theme.textSecondary }]}>
+                  When you reserve or buy items in the marketplace, your campus escrow transactions will appear here.
                 </Text>
-
+                <Pressable
+                  style={[styles.emptyStateBtn, { backgroundColor: theme.primary }]}
+                  onPress={() => router.push('/(tabs)/marketplace')}>
+                  <Text style={styles.emptyStateBtnText}>Browse Marketplace</Text>
+                </Pressable>
+              </View>
+            ) : (
+              studentPurchases.map((p) => (
                 <View
+                  key={p.id}
                   style={[
-                    styles.purchaseSpotBox,
-                    { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
+                    styles.purchaseCard,
+                    { backgroundColor: theme.surface, borderColor: theme.border },
                   ]}>
-                  <Ionicons name="location" size={14} color={theme.primary} />
-                  <Text style={[styles.purchaseSpotText, { color: theme.text }]}>
-                    Campus Meetup: {p.safeMeetupSpot}
+                  <View style={styles.purchaseHeader}>
+                    <View style={styles.purchaseHeaderLeft}>
+                      <Ionicons name="shield-checkmark" size={15} color={theme.primary} />
+                      <Text style={[styles.purchaseRef, { color: theme.primary }]}>
+                        {p.referenceCode}
+                      </Text>
+                    </View>
+                    <View style={[styles.inEscrowTag, { backgroundColor: theme.goldBg }]}>
+                      <Text style={[styles.inEscrowTagText, { color: theme.gold }]}>
+                        Held in Escrow
+                      </Text>
+                    </View>
+                  </View>
+
+                  <Text style={[styles.purchaseTitle, { color: theme.text }]}>{p.title}</Text>
+                  <Text style={[styles.purchaseSeller, { color: theme.textSecondary }]}>
+                    Seller: {p.sellerName} • ₱{p.price}
+                  </Text>
+
+                  <View
+                    style={[
+                      styles.purchaseSpotBox,
+                      { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
+                    ]}>
+                    <Ionicons name="location" size={14} color={theme.primary} />
+                    <Text style={[styles.purchaseSpotText, { color: theme.text }]}>
+                      Campus Meetup: {p.safeMeetupSpot}
+                    </Text>
+                  </View>
+
+                  <Text style={[styles.purchaseDisclaimer, { color: theme.textMuted }]}>
+                    Payment safely held in escrow. Inspect in person before confirmation.
                   </Text>
                 </View>
-
-                <Text style={[styles.purchaseDisclaimer, { color: theme.textMuted }]}>
-                  Payment safely held in escrow. Inspect in person before confirmation.
-                </Text>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         )}
 
@@ -3306,11 +3450,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexShrink: 1,
   },
   studentName: {
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: -0.3,
+    flexShrink: 1,
   },
   verifiedTag: {
     paddingHorizontal: 6,

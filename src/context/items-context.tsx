@@ -1,6 +1,14 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { EscrowTransaction, MarketplaceItem, SellerSubscriptionState, WalletState } from '@/types/item';
-import { INITIAL_SUBSCRIPTION_STATE, INITIAL_WALLET_STATE, MOCK_ITEMS } from '@/data/mock-items';
+import { INITIAL_SUBSCRIPTION_STATE, MOCK_ITEMS } from '@/data/mock-items';
+import {
+  deleteItemFromSupabase,
+  fetchItemsFromSupabase,
+  fetchTransactionsFromSupabase,
+  saveItemToSupabase,
+  saveTransactionToSupabase,
+  updateItemInSupabase,
+} from '@/lib/database';
 
 interface CashOutResult {
   success: boolean;
@@ -22,8 +30,10 @@ interface GrowthActionResult {
 
 interface ItemsContextType {
   items: MarketplaceItem[];
-  addItem: (item: MarketplaceItem) => void;
+  isLoading: boolean;
+  addItem: (item: MarketplaceItem) => Promise<void>;
   getItemById: (id: string) => MarketplaceItem | undefined;
+  refreshItems: () => Promise<void>;
   resetItems: () => void;
   // Seller Growth Tools
   bumpItem: (id: string) => GrowthActionResult;
@@ -44,15 +54,97 @@ interface ItemsContextType {
   cancelSubscription: () => void;
 }
 
+export const EMPTY_WALLET_STATE: WalletState = {
+  availableBalance: 0,
+  inEscrowBalance: 0,
+  totalEarned: 0,
+  transactions: [],
+};
+
 const ItemsContext = createContext<ItemsContextType | undefined>(undefined);
 
 export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<MarketplaceItem[]>(MOCK_ITEMS);
-  const [wallet, setWallet] = useState<WalletState>(INITIAL_WALLET_STATE);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [wallet, setWallet] = useState<WalletState>(EMPTY_WALLET_STATE);
   const [subscription, setSubscription] = useState<SellerSubscriptionState>(INITIAL_SUBSCRIPTION_STATE);
 
-  const addItem = useCallback((newItem: MarketplaceItem) => {
-    setItems((prev) => [newItem, ...prev]);
+  // Initial load from Supabase with optimistic fallback
+  const refreshItems = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const liveItems = await fetchItemsFromSupabase();
+      if (liveItems && liveItems.length > 0) {
+        setItems(liveItems);
+      }
+    } catch (err) {
+      console.warn('Using seeded items while Supabase connects:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchItemsFromSupabase()
+      .then((liveItems) => {
+        if (isMounted && liveItems && liveItems.length > 0) {
+          setItems(liveItems);
+        }
+      })
+      .catch((err) => {
+        console.warn('Using seeded items while Supabase connects:', err);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoading(false);
+        }
+      });
+
+    // Load Escrow Wallet transactions from Supabase
+    fetchTransactionsFromSupabase('user_active_student')
+      .then((txs) => {
+        if (isMounted && txs && txs.length > 0) {
+          let avail = 0;
+          let escrow = 0;
+          let earned = 0;
+          txs.forEach((t) => {
+            if (t.type === 'escrow_release') {
+              avail += t.amount;
+              earned += t.amount;
+            } else if (t.type === 'incoming_escrow' && t.status === 'pending') {
+              escrow += t.amount;
+            } else if (t.type === 'cash_out') {
+              avail -= t.amount;
+            }
+          });
+          setWallet({
+            availableBalance: Math.max(0, avail),
+            inEscrowBalance: Math.max(0, escrow),
+            totalEarned: Math.max(0, earned),
+            transactions: txs as EscrowTransaction[],
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Error fetching transactions from Supabase:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const addItem = useCallback(async (newItem: MarketplaceItem) => {
+    // 1. Optimistic instant UI update
+    setItems((prev) => [newItem, ...prev.filter((i) => i.id !== newItem.id)]);
+
+    // 2. Persist to Supabase in background
+    try {
+      await saveItemToSupabase(newItem);
+    } catch (err) {
+      console.warn('Supabase addItem error (kept in local state):', err);
+    }
   }, []);
 
   const getItemById = useCallback(
@@ -62,7 +154,7 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
 
   const resetItems = useCallback(() => {
     setItems(MOCK_ITEMS);
-    setWallet(INITIAL_WALLET_STATE);
+    setWallet(EMPTY_WALLET_STATE);
     setSubscription(INITIAL_SUBSCRIPTION_STATE);
   }, []);
 
@@ -86,6 +178,14 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
         bumpCount: (target.bumpCount ?? 0) + 1,
         lastBumpedAt: 'Just now',
       };
+
+      // Async sync to Supabase
+      updateItemInSupabase(id, {
+        bumpCount: (target.bumpCount ?? 0) + 1,
+        lastBumpedAt: 'Just now',
+        createdAt: 'Just now',
+      }).catch((err) => console.warn('Supabase bump error:', err));
+
       // Move to front of the marketplace feed
       const rest = prev.filter((i) => i.id !== id);
       return [updated, ...rest];
@@ -118,6 +218,11 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       prev.map((i) => (i.id === id ? { ...i, isUrgent: !i.isUrgent } : i))
     );
 
+    // Async sync to Supabase
+    updateItemInSupabase(id, { isUrgent: willEnable }).catch((err) =>
+      console.warn('Supabase toggle urgent error:', err)
+    );
+
     if (willEnable) {
       setSubscription((prev) => ({
         ...prev,
@@ -141,10 +246,16 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
           : i
       )
     );
+
+    updateItemInSupabase(id, {
+      status,
+      isReserved: status === 'reserved',
+    }).catch((err) => console.warn('Supabase setItemStatus error:', err));
   }, []);
 
   const deleteItem = useCallback((id: string) => {
     setItems((prev) => prev.filter((i) => i.id !== id));
+    deleteItemFromSupabase(id).catch((err) => console.warn('Supabase deleteItem error:', err));
   }, []);
 
   // Escrow Wallet: Cash-Out withdrawal
@@ -180,6 +291,8 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
         availableBalance: prev.availableBalance - amount,
         transactions: [newTx, ...prev.transactions],
       }));
+
+      saveTransactionToSupabase(newTx).catch((err) => console.warn('Supabase cashOut tx error:', err));
 
       return { success: true, referenceCode };
     },
@@ -271,6 +384,8 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
         }));
       }
 
+      saveTransactionToSupabase(newTx).catch((err) => console.warn('Supabase subscribe tx error:', err));
+
       setSubscription({
         tier,
         tierName,
@@ -296,8 +411,10 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo(
     () => ({
       items,
+      isLoading,
       addItem,
       getItemById,
+      refreshItems,
       resetItems,
       bumpItem,
       toggleUrgent,
@@ -312,8 +429,10 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       items,
+      isLoading,
       addItem,
       getItemById,
+      refreshItems,
       resetItems,
       bumpItem,
       toggleUrgent,

@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useItems } from '@/context/items-context';
-import { MOCK_ITEMS } from '@/data/mock-items';
+import { saveOrderToSupabase, saveTransactionToSupabase } from '@/lib/database';
 
 type PaymentMethod = 'cod' | 'gcash' | 'maya';
 
@@ -29,9 +29,9 @@ export default function PaymentScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { items } = useItems();
+  const { items, setItemStatus } = useItems();
 
-  const item = items.find((i) => i.id === id) || MOCK_ITEMS.find((i) => i.id === id) || MOCK_ITEMS[0];
+  const item = items.find((i) => i.id === id) || items[0];
   const itemPrice = item.price ?? 0;
 
   // Zero Pre-Selection Invariant: Options must start unselected (null)
@@ -58,6 +58,36 @@ export default function PaymentScreen() {
       const code = prefix + Math.floor(100000 + Math.random() * 900000);
       setReferenceCode(code);
       setPaymentState('success');
+
+      // Persist order & transaction to Supabase and mark item as reserved
+      if (item) {
+        setItemStatus(item.id, 'reserved');
+
+        saveOrderToSupabase({
+          id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          itemId: item.id,
+          title: item.title,
+          price: itemPrice,
+          sellerName: item.sellerName,
+          safeMeetupSpot: item.safeMeetupSpot,
+          escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
+          referenceCode: code,
+          channel: selectedMethod,
+        }).catch((err) => console.warn('Supabase saveOrder error:', err));
+
+        saveTransactionToSupabase({
+          id: `tx_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          type: 'incoming_escrow',
+          title: `Payment: ${item.title.substring(0, 32)}`,
+          amount: itemPrice,
+          date: 'Just now',
+          status: 'completed',
+          referenceCode: code,
+          channel: selectedMethod,
+          counterpartName: item.sellerName,
+          notes: `Handover at ${item.safeMeetupSpot}`,
+        }).catch((err) => console.warn('Supabase saveTransaction error:', err));
+      }
     }, 1000);
   };
 

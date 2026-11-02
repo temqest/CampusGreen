@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   FlatList,
   Pressable,
@@ -12,40 +12,23 @@ import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { MOCK_ITEMS } from '@/data/mock-items';
-import { MarketplaceItem } from '@/types/item';
-
-interface BasketItem {
-  item: MarketplaceItem;
-  quantity: number;
-}
+import { useBasket } from '@/context/basket-context';
 
 export default function BasketScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-
-  // Initial mock basket with items from MOCK_ITEMS
-  const [basketItems, setBasketItems] = useState<BasketItem[]>([
-    { item: MOCK_ITEMS[0], quantity: 1 },
-    { item: MOCK_ITEMS[1], quantity: 1 },
-  ]);
+  const {
+    basketItems,
+    removeFromBasket,
+    subtotal,
+    totalCo2Saved,
+    itemCount,
+  } = useBasket();
 
   const handleRemoveItem = (itemId: string) => {
-    setBasketItems((prev) => prev.filter((b) => b.item.id !== itemId));
+    removeFromBasket(itemId);
   };
-
-  const subtotal = basketItems.reduce(
-    (sum, b) => sum + (b.item.price ?? 0) * b.quantity,
-    0
-  );
-
-  const totalCo2Saved = basketItems.reduce(
-    (sum, b) => sum + (b.item.estimatedCo2SavedKg ?? 0) * b.quantity,
-    0
-  );
-
-  const itemCount = basketItems.reduce((sum, b) => sum + b.quantity, 0);
 
   return (
     <View

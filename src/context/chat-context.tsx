@@ -2,10 +2,16 @@ import React, {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useState,
 } from 'react';
-import { MOCK_ITEMS } from '@/data/mock-items';
 import { MarketplaceItem } from '@/types/item';
+import {
+  fetchChatConversationsFromSupabase,
+  fetchChatMessagesFromSupabase,
+  saveChatConversationToSupabase,
+  saveChatMessageToSupabase,
+} from '@/lib/database';
 
 export interface Message {
   id: string;
@@ -30,148 +36,6 @@ export interface ChatConversation {
   sellerAvatarUri?: string;
 }
 
-const INITIAL_CONVERSATIONS: ChatConversation[] = [
-  {
-    id: 'conv-swap',
-    itemId: '4',
-    sellerName: 'Paolo Reyes',
-    sellerYear: '3rd Year Arch',
-    itemTitle: 'Drafting Board (24x36) with Rotring T-Square',
-    price: null,
-    tradeType: 'swap',
-    lastMessage: 'I’d love to swap for the desk study lamp! Tap accept to confirm trade.',
-    timestamp: '10m ago',
-    unreadCount: 1,
-    safeMeetupSpot: 'EA Building Security Guard Post',
-    sellerAvatarUri: 'https://images.unsplash.com/photo-1680525021501-ddea41969892?w=400&q=80',
-  },
-  {
-    id: 'conv-free',
-    itemId: '3',
-    sellerName: 'Bea Dimaculangan',
-    sellerYear: '2nd Year BSTM',
-    itemTitle: 'Pay-It-Forward: Philippine Heritage & Cultural Tourism Reviewers',
-    price: null,
-    tradeType: 'free',
-    lastMessage: 'The heritage review notes are all set for you! Tap accept to confirm reservation.',
-    timestamp: '25m ago',
-    unreadCount: 1,
-    safeMeetupSpot: 'Alingal Hall Tourism Lobby',
-    sellerAvatarUri: 'https://images.unsplash.com/photo-1765650113773-0752556dcea0?w=400&q=80',
-  },
-  {
-    id: 'conv-buy-1',
-    itemId: '1',
-    sellerName: 'Maria Santos',
-    sellerYear: '3rd Year BSTM',
-    itemTitle: 'AdNU BS Tourism Corporate Blazer & Scarf Set (Size M)',
-    price: 450,
-    tradeType: 'buy',
-    lastMessage: 'Sure! Let’s meet at Alingal Hall Tourism Lobby tomorrow around 2:30 PM.',
-    timestamp: '1h ago',
-    unreadCount: 0,
-    safeMeetupSpot: 'Alingal Hall Tourism Lobby',
-    sellerAvatarUri: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&q=80',
-  },
-  {
-    id: 'conv-buy-2',
-    itemId: '2',
-    sellerName: 'Kenzo Alcantara',
-    sellerYear: '4th Year BSTM',
-    itemTitle: 'Tour Guiding Portable Voice Amplifier & Wireless Mic Kit',
-    price: 750,
-    tradeType: 'buy',
-    lastMessage: 'Rechargeable amplifier & mic are fully working. Can bring it to Alingal Hall anytime today.',
-    timestamp: '3h ago',
-    unreadCount: 0,
-    safeMeetupSpot: 'Alingal Hall Tourism Lobby',
-    sellerAvatarUri: 'https://images.unsplash.com/photo-1492462543947-040389c4a66c?w=400&q=80',
-  },
-];
-
-const INITIAL_MESSAGES: Record<string, Message[]> = {
-  '4': [
-    {
-      id: 'm1',
-      sender: 'seller',
-      text: 'Hi! Thanks for offering to swap your Desk Study Lamp for my Drafting Board (24x36) with Rotring T-Square.',
-      timestamp: '2:15 PM',
-    },
-    {
-      id: 'm2',
-      sender: 'me',
-      text: 'Hi Paolo! Yes, the lamp is in great condition. Can we meet at EA Building Security Guard Post?',
-      timestamp: '2:18 PM',
-    },
-    {
-      id: 'm3',
-      sender: 'seller',
-      text: 'I’d love to swap for the desk study lamp! Tap accept to confirm trade.',
-      timestamp: '10m ago',
-    },
-  ],
-  '3': [
-    {
-      id: 'm1',
-      sender: 'seller',
-      text: 'Hi! Glad someone can make use of the Philippine Heritage & Cultural Tourism Reviewers! It is completely free.',
-      timestamp: '1:10 PM',
-    },
-    {
-      id: 'm2',
-      sender: 'me',
-      text: 'Thank you Bea! Can I pick it up at Alingal Hall Tourism Lobby?',
-      timestamp: '1:14 PM',
-    },
-    {
-      id: 'm3',
-      sender: 'seller',
-      text: 'The heritage review notes are all set for you! Tap accept to confirm reservation.',
-      timestamp: '25m ago',
-    },
-  ],
-  '1': [
-    {
-      id: 'm1',
-      sender: 'seller',
-      text: 'Hi! Thanks for checking out the BS Tourism Corporate Blazer & Scarf Set (Size M). It is freshly dry-cleaned and ready for practicum.',
-      timestamp: '1:30 PM',
-    },
-    {
-      id: 'm2',
-      sender: 'me',
-      text: 'Hi Maria! Can we meet at Alingal Hall Tourism Lobby?',
-      timestamp: '1:45 PM',
-    },
-    {
-      id: 'm3',
-      sender: 'seller',
-      text: 'Sure! Let’s meet at Alingal Hall Tourism Lobby tomorrow around 2:30 PM.',
-      timestamp: '1h ago',
-    },
-  ],
-  '2': [
-    {
-      id: 'm1',
-      sender: 'seller',
-      text: 'Hey there! Let me know if you need any details about the Tour Guiding Portable Voice Amplifier & Wireless Mic Kit.',
-      timestamp: '11:00 AM',
-    },
-    {
-      id: 'm2',
-      sender: 'me',
-      text: 'Hi Kenzo, is the headset microphone and AUX cord included?',
-      timestamp: '11:15 AM',
-    },
-    {
-      id: 'm3',
-      sender: 'seller',
-      text: 'Rechargeable amplifier & mic are fully working. Can bring it to Alingal Hall anytime today.',
-      timestamp: '3h ago',
-    },
-  ],
-};
-
 interface ChatContextType {
   conversations: ChatConversation[];
   getMessages: (itemId: string, itemMeta?: Partial<MarketplaceItem>) => Message[];
@@ -183,18 +47,40 @@ interface ChatContextType {
   addSystemMessage: (itemId: string, text: string) => void;
   isTypingByItemId: Record<string, boolean>;
   markAsRead: (itemId: string) => void;
+  refreshConversations: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const [conversations, setConversations] =
-    useState<ChatConversation[]>(INITIAL_CONVERSATIONS);
-  const [messagesByItemId, setMessagesByItemId] =
-    useState<Record<string, Message[]>>(INITIAL_MESSAGES);
-  const [isTypingByItemId, setIsTypingByItemId] = useState<
-    Record<string, boolean>
-  >({});
+  // Clean Slate: Starts empty for new accounts, populated from Supabase
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [messagesByItemId, setMessagesByItemId] = useState<Record<string, Message[]>>({});
+  const [isTypingByItemId, setIsTypingByItemId] = useState<Record<string, boolean>>({});
+
+  const refreshConversations = useCallback(async () => {
+    try {
+      const liveConvs = await fetchChatConversationsFromSupabase('user_active_student');
+      setConversations(liveConvs);
+    } catch (err) {
+      console.warn('Error refreshing conversations:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchChatConversationsFromSupabase('user_active_student')
+      .then((convs) => {
+        if (isMounted) setConversations(convs);
+      })
+      .catch((err) => {
+        console.warn('Error loading chat conversations:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const getMessages = useCallback(
     (itemId: string, itemMeta?: Partial<MarketplaceItem>): Message[] => {
@@ -202,18 +88,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         return messagesByItemId[itemId];
       }
 
-      const item =
-        itemMeta || MOCK_ITEMS.find((i) => i.id === itemId) || MOCK_ITEMS[0];
-      const title = item.title || 'this item';
-      const spot = item.safeMeetupSpot || 'the designated campus zone';
+      // Check Supabase in background
+      fetchChatMessagesFromSupabase(itemId).then((dbMsgs) => {
+        if (dbMsgs && dbMsgs.length > 0) {
+          setMessagesByItemId((prev) => ({
+            ...prev,
+            [itemId]: dbMsgs,
+          }));
+        }
+      });
+
+      const title = itemMeta?.title || 'this item';
+      const spot = itemMeta?.safeMeetupSpot || 'the designated campus zone';
 
       const initialGreeting: Message = {
         id: `init-${itemId}`,
         sender: 'seller',
         text:
-          item.tradeType === 'swap'
+          itemMeta?.tradeType === 'swap'
             ? `Hi! Thanks for your interest in swapping for my ${title}. What gear or item are you proposing to trade?`
-            : item.tradeType === 'free'
+            : itemMeta?.tradeType === 'free'
             ? `Hi! Glad someone can make use of the ${title}! It's completely free for campus pickup at ${spot}.`
             : `Hi! Thanks for checking out the ${title}. It's still available for meetup at ${spot}. Feel free to ask any questions!`,
         timestamp: 'Just now',
@@ -245,6 +139,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         [itemId]: [...current, sysMsg],
       };
     });
+
+    saveChatMessageToSupabase({
+      id: sysMsg.id,
+      itemId,
+      sender: 'system',
+      text,
+      timestamp: 'Just now',
+    }).catch((err) => console.warn('Supabase save system message error:', err));
   }, []);
 
   const sendMessage = useCallback(
@@ -279,65 +181,64 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         timestamp: 'Just now',
       };
 
-      const item =
-        itemMeta || MOCK_ITEMS.find((i) => i.id === itemId) || MOCK_ITEMS[0];
-
-      // Update messages immediately for the active chat
+      // 1. Update messages immediately in local state
       setMessagesByItemId((prev) => {
-        const existing = prev[itemId] || getMessages(itemId, item);
+        const existing = prev[itemId] || getMessages(itemId, itemMeta);
         return {
           ...prev,
           [itemId]: [...existing, userMsg],
         };
       });
 
-      // Update / bump conversation in the inbox list
+      // 2. Persist message to Supabase
+      saveChatMessageToSupabase({
+        id: userMsg.id,
+        itemId,
+        sender: 'me',
+        text: userMsg.text,
+        imageUri: userMsg.imageUri,
+        timestamp: 'Just now',
+      }).catch((err) => console.warn('Supabase save user message error:', err));
+
+      // 3. Update / bump conversation in the inbox list
+      const conversationId = `conv-${itemId}`;
+      const updatedConv: ChatConversation = {
+        id: conversationId,
+        itemId,
+        sellerName: itemMeta?.sellerName || 'Campus Student',
+        sellerYear: itemMeta?.sellerYear || 'Verified Student',
+        itemTitle: itemMeta?.title || 'Marketplace Item',
+        price: itemMeta?.price ?? null,
+        tradeType: itemMeta?.tradeType || 'buy',
+        lastMessage: previewText,
+        timestamp: 'Just now',
+        unreadCount: 0,
+        safeMeetupSpot: itemMeta?.safeMeetupSpot || 'Main Library Ground Floor',
+        sellerAvatarUri: itemMeta?.sellerAvatarUri,
+      };
+
       setConversations((prev) => {
-        const existingIndex = prev.findIndex((c) => c.itemId === itemId);
-        if (existingIndex >= 0) {
-          const target = prev[existingIndex];
-          const updated: ChatConversation = {
-            ...target,
-            lastMessage: previewText,
-            timestamp: 'Just now',
-            unreadCount: 0,
-          };
-          const rest = prev.filter((_, idx) => idx !== existingIndex);
-          return [updated, ...rest];
-        }
-
-        // New conversation
-        const newConversation: ChatConversation = {
-          id: `conv-${itemId}`,
-          itemId,
-          sellerName: item.sellerName || 'Campus Student',
-          sellerYear: item.sellerYear || 'Verified Student',
-          itemTitle: item.title || 'Marketplace Item',
-          price: item.price ?? null,
-          tradeType: item.tradeType || 'buy',
-          lastMessage: previewText,
-          timestamp: 'Just now',
-          unreadCount: 0,
-          safeMeetupSpot: item.safeMeetupSpot || 'Campus Meetup Zone',
-          sellerAvatarUri: item.sellerAvatarUri,
-        };
-
-        return [newConversation, ...prev];
+        const rest = prev.filter((c) => c.itemId !== itemId);
+        return [updatedConv, ...rest];
       });
 
-      // Show typing indicator for peer
+      // Persist conversation to Supabase
+      saveChatConversationToSupabase(updatedConv).catch((err) =>
+        console.warn('Supabase save conversation error:', err)
+      );
+
+      // 4. Show typing indicator and simulate realistic peer response
       setIsTypingByItemId((prev) => ({ ...prev, [itemId]: true }));
 
-      // Simulate a realistic student peer response after 900ms
       setTimeout(() => {
         setIsTypingByItemId((prev) => ({ ...prev, [itemId]: false }));
 
         const lower = trimmed.toLowerCase();
-        const spot = item.safeMeetupSpot || 'the safe meetup zone';
+        const spot = itemMeta?.safeMeetupSpot || 'the safe meetup zone';
         let reply = '';
 
         if (imageUri) {
-          reply = `Thanks for sending the photo! The item looks in great condition. Can we meet at ${spot}?`;
+          reply = `Thanks for sending the photo! Looks in great condition. Can we meet at ${spot}?`;
         } else if (
           lower.includes('price') ||
           lower.includes('discount') ||
@@ -366,9 +267,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           lower.includes('thanks')
         ) {
           reply = `You're welcome! See you at ${spot}.`;
-        } else if (item.tradeType === 'swap') {
+        } else if (itemMeta?.tradeType === 'swap') {
           reply = `That sounds like a fair trade! Let's inspect both items together at ${spot}.`;
-        } else if (item.tradeType === 'free') {
+        } else if (itemMeta?.tradeType === 'free') {
           reply = `Awesome! I've reserved it for you. See you at ${spot}!`;
         } else {
           reply = `Got it! Thanks for letting me know. Let's meet at ${spot}!`;
@@ -389,21 +290,29 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           };
         });
 
-        // Update conversation lastMessage with the peer's reply
+        saveChatMessageToSupabase({
+          id: peerMsg.id,
+          itemId,
+          sender: 'seller',
+          text: reply,
+          timestamp: 'Just now',
+        }).catch((err) => console.warn('Supabase save peer message error:', err));
+
+        // Update conversation with peer's reply
+        const replyConv: ChatConversation = {
+          ...updatedConv,
+          lastMessage: reply,
+          timestamp: 'Just now',
+        };
+
         setConversations((prev) => {
-          const existingIndex = prev.findIndex((c) => c.itemId === itemId);
-          if (existingIndex >= 0) {
-            const target = prev[existingIndex];
-            const updated: ChatConversation = {
-              ...target,
-              lastMessage: reply,
-              timestamp: 'Just now',
-            };
-            const rest = prev.filter((_, idx) => idx !== existingIndex);
-            return [updated, ...rest];
-          }
-          return prev;
+          const rest = prev.filter((c) => c.itemId !== itemId);
+          return [replyConv, ...rest];
         });
+
+        saveChatConversationToSupabase(replyConv).catch((err) =>
+          console.warn('Supabase save reply conversation error:', err)
+        );
       }, 900);
     },
     [getMessages]
@@ -418,6 +327,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         addSystemMessage,
         isTypingByItemId,
         markAsRead,
+        refreshConversations,
       }}>
       {children}
     </ChatContext.Provider>
