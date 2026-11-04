@@ -499,4 +499,16 @@ This document captures project-specific design standards, user preferences, and 
   - Provide an automatic fall-through to `inferStudentNameFromId(userId)` (e.g. `user_maria_clara` -> `"Maria Clara"`) and pass `buyerName: currentUser.fullName` across navigation paths (`item/[id].tsx`, `(tabs)/chat.tsx`).
   - Both the chat inbox and chat thread must display the student's actual name, avatar, and year instead of a generic `"Campus Buyer"` placeholder.
 
+- **Application Identity & Icon Assets Configuration**:
+  - The official display name of the application is **`Campus Green`** (with a space), configured under `"expo": { "name": "Campus Green" }` in `app.json` and in `_layout.tsx` navigation headers.
+  - The app icons are sourced from EasyAppIcon assets:
+    - Master 1024x1024 icon: `assets/images/icon.png` (using `iTunesArtwork@2x.png`).
+    - Android adaptive icon foreground: `assets/images/android-icon-foreground.png` (432x432).
+    - Android adaptive icon background: `assets/images/android-icon-background.png` (432x432 solid `#1e8c5a`).
+    - Android adaptive icon background color in `app.json`: `#1e8c5a`.
+    - Android 13+ themed monochrome icon: `assets/images/android-icon-monochrome.png`.
+    - Splash screen icon: `assets/images/splash-icon.png` with brand background `#1e8c5a`.
+    - Web favicon: `assets/images/favicon.png` (48x48).
+    - Removed outdated boilerplate `./assets/expo.icon` Apple Icon catalog to prevent iOS builds from falling back to default Expo template art.
+
 
