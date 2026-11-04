@@ -455,6 +455,13 @@ This document captures project-specific design standards, user preferences, and 
   - Chat conversations, escrow balances, and order histories must load using the active user's unique ID (`activeUserId`) retrieved from storage.
   - Logging into account B will never display private chats or past purchases belonging to account A.
 
+### 32. Welcome Landing Screen Modernization & Brand Eyebrow Invariant
+- **Deep Slate Canvas Over Flat Black**: Avoid flat pitch-black `#000000` backgrounds. Use deep tinted slate/charcoal (`#0A0F0D`) paired with an ambient emerald radial backlight (`react-native-svg` RadialGradient at ~0.22 opacity) to deliver a sleek, modern fintech/edtech feel (Linear/Cash App vibe).
+- **Brand Eyebrow Invariant (No Decorative Pill)**: Never wrap "CAMPUSGREEN" in a pill badge or container. Keep it as a pure, tracked-out, bold uppercase text eyebrow (`letterSpacing: 2.2`, `fontSize: 12`, `color: #34D399`). This strictly adheres to the **Zero Decorative Badges / Pills** invariant.
+- **Hero Cluster Visual Language Unification**: The 3-circle motif must share an identical visual language: crisp white glyphs (`#FFFFFF`), unified visual stroke weights, frosted dark emerald discs (`rgba(16, 185, 129, 0.16)`), and zero contrasting amber/yellow accents.
+- **CTA Hierarchy**: Use a vibrant emerald primary button paired with a sleek ghost button for secondary actions (`backgroundColor: 'transparent'`, `borderWidth: 1`, `borderColor: 'rgba(255, 255, 255, 0.15)'`) with accessible 48px+ mobile thumb touch targets.
+
+
 
 
 
