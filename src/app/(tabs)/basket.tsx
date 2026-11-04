@@ -15,6 +15,13 @@ import { useTheme } from '@/hooks/use-theme';
 import { useBasket } from '@/context/basket-context';
 import { useChat } from '@/context/chat-context';
 
+function formatAmount(num: number): string {
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: Number.isInteger(num) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export default function BasketScreen() {
   const theme = useTheme();
   const router = useRouter();
@@ -27,6 +34,9 @@ export default function BasketScreen() {
     totalCo2Saved,
     itemCount,
   } = useBasket();
+
+  const platformFee = Math.round(subtotal * 0.05 * 100) / 100;
+  const totalAmount = subtotal + platformFee;
 
   const handleRemoveItem = (itemId: string) => {
     removeFromBasket(itemId);
@@ -304,7 +314,7 @@ export default function BasketScreen() {
                   Items Subtotal
                 </Text>
                 <Text style={[styles.summaryValue, { color: theme.text }]}>
-                  ₱{subtotal.toLocaleString()}
+                  ₱{formatAmount(subtotal)}
                 </Text>
               </View>
 
@@ -314,10 +324,10 @@ export default function BasketScreen() {
                     styles.summaryLabel,
                     { color: theme.textSecondary },
                   ]}>
-                  Campus Escrow Protection
+                  Platform Fee (5%)
                 </Text>
-                <Text style={[styles.summaryValue, { color: theme.primary }]}>
-                  Free (₱0)
+                <Text style={[styles.summaryValue, { color: theme.text }]}>
+                  ₱{formatAmount(platformFee)}
                 </Text>
               </View>
 
@@ -337,7 +347,7 @@ export default function BasketScreen() {
                   Total Amount
                 </Text>
                 <Text style={[styles.totalValue, { color: theme.text }]}>
-                  ₱{subtotal.toLocaleString()}
+                  ₱{formatAmount(totalAmount)}
                 </Text>
               </View>
 
@@ -385,13 +395,13 @@ export default function BasketScreen() {
               Total to pay
             </Text>
             <Text style={[styles.dockTotalAmount, { color: theme.text }]}>
-              ₱{subtotal.toLocaleString()}
+              ₱{formatAmount(totalAmount)}
             </Text>
           </View>
 
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={`Proceed to checkout ₱${subtotal}`}
+            accessibilityLabel={`Proceed to checkout ₱${formatAmount(totalAmount)}`}
             style={({ pressed }) => [
               styles.checkoutButton,
               {

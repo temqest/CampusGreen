@@ -96,7 +96,7 @@ export function mapItemToDb(item: MarketplaceItem): any {
     year_level: item.yearLevel || null,
     campus: item.campus,
     safe_meetup_spot: item.safeMeetupSpot,
-    seller_id: item.sellerId || (item as any).isOwner ? (item.sellerId || 'user_active_student') : null,
+    seller_id: item.sellerId || null,
     seller_name: item.sellerName,
     seller_rating: item.sellerRating,
     seller_year: item.sellerYear,

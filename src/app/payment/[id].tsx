@@ -27,6 +27,13 @@ type PaymentMethod = 'cod' | 'gcash' | 'maya';
 const GCASH_LOGO = require('@/assets/gcash.svg');
 const MAYA_LOGO = require('@/assets/maya.svg');
 
+function formatAmount(num: number): string {
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: Number.isInteger(num) ? 0 : 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 export default function PaymentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const theme = useTheme();
@@ -37,6 +44,8 @@ export default function PaymentScreen() {
 
   const item = items.find((i) => i.id === id) || items[0];
   const itemPrice = item.price ?? 0;
+  const platformFee = Math.round(itemPrice * 0.05 * 100) / 100;
+  const totalAmount = itemPrice + platformFee;
 
   // Prevent purchasing own listing
   useEffect(() => {
@@ -51,10 +60,10 @@ export default function PaymentScreen() {
         } catch {}
       }
 
-      const isOwner =
-        (!!currentUserId && item.sellerId === currentUserId) ||
-        (item as any).isOwner === true ||
-        (!!currentUserName && item.sellerName.trim().toLowerCase() === currentUserName);
+      const isOwner = Boolean(
+        (currentUserId && item?.sellerId && item.sellerId === currentUserId) ||
+        (currentUserName && item?.sellerName && item.sellerName.trim().toLowerCase() === currentUserName)
+      );
 
       if (isOwner) {
         Alert.alert(
@@ -99,7 +108,7 @@ export default function PaymentScreen() {
         ensureConversation(item);
         addSystemMessage(
           item.id,
-          `💳 Purchase Initiated! Escrow payment for "${item.title}" (₱${itemPrice.toLocaleString()}) confirmed via ${
+          `💳 Purchase Initiated! Escrow payment for "${item.title}" (₱${formatAmount(totalAmount)} incl. 5% platform fee) confirmed via ${
             selectedMethod === 'cod' ? 'Cash on Delivery' : selectedMethod.toUpperCase()
           }. Reference #${code}. Meetup zone: ${item.safeMeetupSpot}.`
         );
@@ -118,7 +127,7 @@ export default function PaymentScreen() {
             itemId: item.id,
             userId: activeUserId,
             title: item.title,
-            price: itemPrice,
+            price: totalAmount,
             sellerName: item.sellerName,
             safeMeetupSpot: item.safeMeetupSpot,
             escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
@@ -131,13 +140,13 @@ export default function PaymentScreen() {
             userId: activeUserId,
             type: 'incoming_escrow',
             title: `Payment: ${item.title.substring(0, 32)}`,
-            amount: itemPrice,
+            amount: totalAmount,
             date: 'Just now',
             status: 'completed',
             referenceCode: code,
             channel: selectedMethod,
             counterpartName: item.sellerName,
-            notes: `Handover at ${item.safeMeetupSpot}`,
+            notes: `Handover at ${item.safeMeetupSpot} (Item: ₱${formatAmount(itemPrice)} + 5% Fee: ₱${formatAmount(platformFee)})`,
           }, activeUserId).catch((err) => console.warn('Supabase saveTransaction error:', err));
         });
       }
@@ -194,8 +203,8 @@ export default function PaymentScreen() {
             <Text
               style={[styles.successSubtitle, { color: theme.textSecondary }]}>
               {selectedMethod === 'cod'
-                ? `Your order is reserved with ${item.sellerName}. Prepare ₱${itemPrice.toLocaleString()} in exact cash to pay in person upon inspecting the item at ${item.safeMeetupSpot}.`
-                : `₱${itemPrice.toLocaleString()} is safely held by CampusGreen until you meet ${item.sellerName} and confirm item inspection.`}
+                ? `Your order is reserved with ${item.sellerName}. Prepare ₱${formatAmount(totalAmount)} in exact cash to pay in person upon inspecting the item at ${item.safeMeetupSpot}.`
+                : `₱${formatAmount(totalAmount)} is safely held by CampusGreen until you meet ${item.sellerName} and confirm item inspection.`}
             </Text>
           </View>
 
@@ -255,11 +264,33 @@ export default function PaymentScreen() {
             <View style={[styles.receiptDivider, { backgroundColor: theme.borderSubtle }]} />
 
             <View style={styles.receiptRow}>
+              <Text style={[styles.receiptLabel, { color: theme.textSecondary }]}>
+                Item Subtotal
+              </Text>
+              <Text style={[styles.receiptValue, { color: theme.text }]}>
+                ₱{formatAmount(itemPrice)}
+              </Text>
+            </View>
+
+            <View style={[styles.receiptDivider, { backgroundColor: theme.borderSubtle }]} />
+
+            <View style={styles.receiptRow}>
+              <Text style={[styles.receiptLabel, { color: theme.textSecondary }]}>
+                Platform Fee (5%)
+              </Text>
+              <Text style={[styles.receiptValue, { color: theme.text }]}>
+                ₱{formatAmount(platformFee)}
+              </Text>
+            </View>
+
+            <View style={[styles.receiptDivider, { backgroundColor: theme.borderSubtle }]} />
+
+            <View style={styles.receiptRow}>
               <Text style={[styles.receiptLabelBold, { color: theme.text }]}>
                 {selectedMethod === 'cod' ? 'Total Cash on Delivery' : 'Total Held in Escrow'}
               </Text>
               <Text style={[styles.receiptTotalValue, { color: theme.primary }]}>
-                ₱{itemPrice.toLocaleString()}
+                ₱{formatAmount(totalAmount)}
               </Text>
             </View>
           </View>
@@ -512,16 +543,16 @@ export default function PaymentScreen() {
               Item Subtotal
             </Text>
             <Text style={[styles.breakdownValue, { color: theme.text }]}>
-              ₱{itemPrice.toLocaleString()}
+              ₱{formatAmount(itemPrice)}
             </Text>
           </View>
 
           <View style={styles.breakdownRow}>
             <Text style={[styles.breakdownLabel, { color: theme.textSecondary }]}>
-              Safe Campus Escrow Fee
+              Platform Fee (5%)
             </Text>
-            <Text style={[styles.breakdownFree, { color: theme.primary }]}>
-              ₱0.00 (Free for Students)
+            <Text style={[styles.breakdownValue, { color: theme.text }]}>
+              ₱{formatAmount(platformFee)}
             </Text>
           </View>
 
@@ -537,7 +568,7 @@ export default function PaymentScreen() {
               Total Amount
             </Text>
             <Text style={[styles.totalAmount, { color: theme.primary }]}>
-              ₱{itemPrice.toLocaleString()}
+              ₱{formatAmount(totalAmount)}
             </Text>
           </View>
         </View>
@@ -629,7 +660,7 @@ export default function PaymentScreen() {
                 </Text>
               </View>
               <Text style={[styles.codDetailsText, { color: theme.textSecondary }]}>
-                • Please prepare exact cash (₱{itemPrice.toLocaleString()}) for smooth campus handover.
+                • Please prepare exact cash (₱{formatAmount(totalAmount)}) for smooth campus handover.
               </Text>
               <Text style={[styles.codDetailsText, { color: theme.textSecondary }]}>
                 • Inspect the item thoroughly at {item.safeMeetupSpot} before handing over cash.
@@ -748,7 +779,7 @@ export default function PaymentScreen() {
                 </Pressable>
               </View>
               <Text style={[styles.formHelperText, { color: theme.textMuted }]}>
-                You will authorize ₱{itemPrice.toLocaleString()} via secure
+                You will authorize ₱{formatAmount(totalAmount)} via secure
                 GCash MPIN. Funds are held safely until pickup.
               </Text>
             </View>
@@ -885,9 +916,9 @@ export default function PaymentScreen() {
           accessibilityRole="button"
           accessibilityLabel={
             selectedMethod === 'cod'
-              ? `Confirm Cash on Delivery for ₱${itemPrice.toLocaleString()}`
+              ? `Confirm Cash on Delivery for ₱${formatAmount(totalAmount)}`
               : selectedMethod
-              ? `Pay ₱${itemPrice.toLocaleString()} with ${getMethodDisplayName(selectedMethod)}`
+              ? `Pay ₱${formatAmount(totalAmount)} with ${getMethodDisplayName(selectedMethod)}`
               : 'Select a payment option'
           }
           disabled={!selectedMethod || paymentState === 'processing'}
@@ -929,9 +960,9 @@ export default function PaymentScreen() {
                 ? 'Reserving Order for Pickup...'
                 : 'Securing Escrow Payment...'
               : selectedMethod === 'cod'
-              ? `Confirm Cash on Delivery • ₱${itemPrice.toLocaleString()}`
+              ? `Confirm Cash on Delivery • ₱${formatAmount(totalAmount)}`
               : selectedMethod
-              ? `Pay ₱${itemPrice.toLocaleString()} with ${getMethodDisplayName(selectedMethod)}`
+              ? `Pay ₱${formatAmount(totalAmount)} with ${getMethodDisplayName(selectedMethod)}`
               : 'Select a Payment Option'}
           </Text>
         </Pressable>

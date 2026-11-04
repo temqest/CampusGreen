@@ -76,6 +76,7 @@ export default function MarketplaceScreen() {
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [profileName, setProfileName] = useState('New Student');
+  const [profileId, setProfileId] = useState('');
   const [userOrders, setUserOrders] = useState<any[]>([]);
 
   // Load active student profile & orders to compute live personal Green Impact
@@ -85,7 +86,10 @@ export default function MarketplaceScreen() {
       const local = await AsyncStorage.getItem('@campusgreen_user_profile');
       if (local) {
         const parsed = JSON.parse(local);
-        if (parsed.id) activeUserId = parsed.id;
+        if (parsed.id) {
+          activeUserId = parsed.id;
+          setProfileId(parsed.id);
+        }
         if (parsed.fullName) setProfileName(parsed.fullName);
       }
       const orders = await fetchOrdersFromSupabase(activeUserId);
@@ -98,19 +102,20 @@ export default function MarketplaceScreen() {
   useFocusEffect(
     useCallback(() => {
       loadUserActivity();
-    }, [loadUserActivity])
+      refreshItems().catch(() => {});
+    }, [loadUserActivity, refreshItems])
   );
 
   // Compute live user stats from active items sold & purchased
   const liveUserStats = useMemo(() => {
     const userSoldItems = items.filter((item) => {
-      const isOwner = (item as any).isOwner === true;
+      const isIdSeller = profileId && item.sellerId === profileId;
       const isNamedSeller =
         profileName &&
         profileName !== 'New Student' &&
         profileName !== 'Student' &&
         item.sellerName.toLowerCase() === profileName.toLowerCase();
-      return (isOwner || isNamedSeller) && item.status === 'sold';
+      return (isIdSeller || isNamedSeller) && item.status === 'sold';
     });
 
     const userItemsReused = userSoldItems.length + userOrders.length;
@@ -127,7 +132,7 @@ export default function MarketplaceScreen() {
       userCo2SavedKg,
       userMoneySavedPhp,
     };
-  }, [items, profileName, userOrders]);
+  }, [items, profileId, profileName, userOrders]);
 
   const isSearching = searchQuery.trim().length > 0;
 

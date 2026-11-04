@@ -272,7 +272,6 @@ export default function SellScreen() {
             : 'Pre-loved campus gear in great condition.'),
         estimatedCo2SavedKg: estimatedCo2,
       };
-      (newItem as any).isOwner = true;
 
       await addItem(newItem);
       setIsSubmitting(false);

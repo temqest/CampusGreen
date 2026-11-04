@@ -58,10 +58,10 @@ export default function ItemDetailScreen() {
     });
   }, []);
 
-  const isOwner =
-    (!!currentUserId && item.sellerId === currentUserId) ||
-    (item as any).isOwner === true ||
-    (!!currentUserName && item.sellerName.trim().toLowerCase() === currentUserName);
+  const isOwner = Boolean(
+    (currentUserId && item?.sellerId && item.sellerId === currentUserId) ||
+    (currentUserName && item?.sellerName && item.sellerName.trim().toLowerCase() === currentUserName)
+  );
   const photos: ItemPhoto[] =
     item.photos && item.photos.length > 0
       ? item.photos

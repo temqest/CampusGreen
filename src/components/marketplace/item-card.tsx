@@ -40,10 +40,10 @@ export function ItemCard({ item }: ItemCardProps) {
     });
   }, []);
 
-  const isOwner =
-    (!!currentUserId && item.sellerId === currentUserId) ||
-    (item as any).isOwner === true ||
-    (!!currentUserName && item.sellerName.trim().toLowerCase() === currentUserName);
+  const isOwner = Boolean(
+    (currentUserId && item?.sellerId && item.sellerId === currentUserId) ||
+    (currentUserName && item?.sellerName && item.sellerName.trim().toLowerCase() === currentUserName)
+  );
 
   const inBasket = isInBasket(item.id);
 

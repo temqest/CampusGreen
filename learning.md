@@ -461,15 +461,14 @@ This document captures project-specific design standards, user preferences, and 
 - **Hero Cluster Visual Language Unification**: The 3-circle motif must share an identical visual language: crisp white glyphs (`#FFFFFF`), unified visual stroke weights, frosted dark emerald discs (`rgba(16, 185, 129, 0.16)`), and zero contrasting amber/yellow accents.
 - **CTA Hierarchy**: Use a vibrant emerald primary button paired with a sleek ghost button for secondary actions (`backgroundColor: 'transparent'`, `borderWidth: 1`, `borderColor: 'rgba(255, 255, 255, 0.15)'`) with accessible 48px+ mobile thumb touch targets.
 
+### 33. High Contrast on Action Cards in Manage Modal
+- **Solid Primary Green with White Text for Direct Actions**: In action cards such as "Mark as Sold" in the listing management modal, avoid pairing green background tints with dark green text (`badgeGreenBg` with `primaryDark`), which creates low contrast and illegibility (particularly in dark themes where both background and text resolve to dark greens). Use solid primary green (`theme.primary`) paired with crisp white text (`#FFFFFF`), white description copy (`rgba(255, 255, 255, 0.9)`), translucent icon container (`rgba(255, 255, 255, 0.2)`), and white chevron for clear legibility and distinct action hierarchy.
 
+### 34. Checkout & Payment Pricing Architecture: 5% Platform Fee
+- **Transparent Fee Breakdown**: On checkout and payment pages (payment/[id].tsx and basket.tsx), display the 5% Platform Fee (itemPrice * 0.05) directly without an additional redundant ₱0 Safe Campus Escrow Fee row.
+- **End-to-End Total Consistency**: All downstream purchase artifacts—including the total amount due, bottom pinned checkout dock, payment method authorization prompts (GCash MPIN, Cash on Delivery cash preparation amount), payment receipt card, chat confirmation system notice, and Supabase orders/transactions—must reflect the calculated totalAmount (itemPrice + platformFee).
 
-
-
-
-
-
-
-
-
-
-
+### 35. Pure Relational Listing Ownership & In-Memory State Isolation Across Sessions
+- **Zero In-Memory Ownership Mutation**: Never stamp runtime flags like `(newItem as any).isOwner = true` onto item data models. Ownership is not an intrinsic property of a product; it is strictly a relational equality check between the active authenticated user and the item's creator (`currentUserId === item.sellerId || currentUserName.toLowerCase() === item.sellerName.toLowerCase()`).
+- **Zero `(item as any).isOwner === true` Bypass Checks**: Delete all fallback checks to `(item as any).isOwner === true` across `item/[id].tsx`, `payment/[id].tsx`, `item-card.tsx`, `chat/[id].tsx`, `profile.tsx`, and `marketplace.tsx`. These bypass checks cause items created in a previous session to falsely identify any subsequent logged-in user as the owner.
+- **Session Cleanup & Reactive Feed Synchronization**: On user sign-out in `profile.tsx`, reset local user states, clear `@campusgreen_user_profile`, and trigger `refreshItems()` on `ItemsContext`. In `marketplace.tsx`, trigger `refreshItems()` on screen focus (`useFocusEffect`) so switching accounts always loads clean, unpolluted data from Supabase.

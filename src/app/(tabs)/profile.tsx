@@ -65,6 +65,7 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const {
     items,
+    refreshItems,
     bumpItem,
     toggleUrgent,
     setItemStatus,
@@ -232,13 +233,15 @@ export default function ProfileScreen() {
 
   // Filter items owned by the current student (empty for new accounts until they post)
   const userItems = items.filter((item) => {
-    if (!profileName || profileName === 'New Student' || profileName === 'Student') {
-      return (item as any).isOwner === true;
-    }
-    return (
-      item.sellerName.toLowerCase() === profileName.toLowerCase() ||
-      (item as any).isOwner === true
+    const isIdSeller = Boolean(profileId && item.sellerId && item.sellerId === profileId);
+    const isNamedSeller = Boolean(
+      profileName &&
+      profileName !== 'New Student' &&
+      profileName !== 'Student' &&
+      item.sellerName &&
+      item.sellerName.trim().toLowerCase() === profileName.trim().toLowerCase()
     );
+    return isIdSeller || isNamedSeller;
   });
   const activeListings = userItems.filter((i) => i.status !== 'sold');
   const soldListings = userItems.filter((i) => i.status === 'sold');
@@ -523,6 +526,10 @@ export default function ProfileScreen() {
           try {
             await AsyncStorage.removeItem('@campusgreen_user_profile');
             await supabase.auth.signOut().catch(() => {});
+            setProfileId('');
+            setProfileName('');
+            setStudentPurchases([]);
+            await refreshItems().catch(() => {});
           } catch (e) {
             console.warn('Error clearing profile on logout:', e);
           }
@@ -1872,21 +1879,21 @@ export default function ProfileScreen() {
                     accessibilityRole="button"
                     style={[
                       styles.manageOptionCard,
-                      { backgroundColor: theme.badgeGreenBg, borderColor: theme.primaryLight },
+                      { backgroundColor: theme.primary, borderColor: theme.primary },
                     ]}
                     onPress={() => handleMarkSold(manageItem)}>
-                    <View style={[styles.manageOptionIconCircle, { backgroundColor: theme.primary }]}>
+                    <View style={[styles.manageOptionIconCircle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
                       <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.manageOptionTitle, { color: theme.primaryDark }]}>
+                      <Text style={[styles.manageOptionTitle, { color: '#FFFFFF' }]}>
                         Mark as Sold
                       </Text>
-                      <Text style={[styles.manageOptionDesc, { color: theme.primaryDark }]}>
+                      <Text style={[styles.manageOptionDesc, { color: '#FFFFFF', opacity: 0.9 }]}>
                         Complete trade and move this listing to your Sold record.
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={18} color={theme.primary} />
+                    <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
                   </Pressable>
 
                   {/* Option 4: Delete Listing */}

@@ -327,10 +327,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             } catch {}
           }
 
-          const isUserOwned =
-            (!!currentUserId && itemMeta?.sellerId === currentUserId) ||
-            (!!currentUserName && itemMeta?.sellerName?.trim().toLowerCase() === currentUserName) ||
-            (itemMeta as any)?.isOwner === true;
+          const isUserOwned = Boolean(
+            (currentUserId && itemMeta?.sellerId && itemMeta.sellerId === currentUserId) ||
+            (currentUserName && itemMeta?.sellerName && itemMeta.sellerName.trim().toLowerCase() === currentUserName)
+          );
 
           if (isUserOwned) {
             // Own listing - no auto-reply
