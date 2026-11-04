@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { Condition, ItemCategory, MarketplaceItem, TradeType } from '@/types/item';
+import { formatConversationTime, formatMessageTime } from '@/utils/format-time';
 
 export interface UserProfile {
   id: string;
@@ -263,6 +264,23 @@ export async function saveProfileToSupabase(profile: UserProfile): Promise<void>
 
 // ======================== CHAT API ========================
 
+/**
+ * Infers a clean, capitalized student display name from an isolated user ID string.
+ * e.g., "user_maria_clara" -> "Maria Clara"
+ *       "user_john_unc_edu_ph" -> "John"
+ *       "user_pvillamer_adnu_edu_ph" -> "Pvillamer"
+ */
+export function inferStudentNameFromId(userId?: string | null): string {
+  if (!userId) return 'Verified Student';
+  if (userId === 'user_active_student') return 'Campus Student';
+
+  const clean = userId.replace(/^user_/, '');
+  const namePart = clean.split(/_(adnu|gbox|unc|usant|cspc|adza|cpu|up|ateneo|dlsu|ust)_/i)[0] || clean;
+  const tokens = namePart.split('_').filter(Boolean);
+  if (tokens.length === 0) return 'Verified Student';
+  return tokens.map((t) => t.charAt(0).toUpperCase() + t.slice(1)).join(' ');
+}
+
 export async function fetchChatConversationsFromSupabase(
   userId: string = 'user_active_student',
   sellerName?: string
@@ -283,23 +301,60 @@ export async function fetchChatConversationsFromSupabase(
     return [];
   }
 
-  return (data || []).map((row) => ({
-    id: row.id,
-    itemId: row.item_id,
-    sellerName: row.seller_name,
-    sellerYear: row.seller_year,
-    itemTitle: row.item_title,
-    price: row.price !== null ? Number(row.price) : null,
-    tradeType: row.trade_type as 'buy' | 'swap' | 'free',
-    lastMessage: row.last_message || '',
-    timestamp: row.timestamp || 'Just now',
-    unreadCount: row.unread_count || 0,
-    safeMeetupSpot: row.safe_meetup_spot,
-    sellerAvatarUri: row.seller_avatar_uri,
-  }));
+  // Batch-resolve real buyer profiles from Supabase profiles table
+  const userIds = Array.from(new Set((data || []).map((r) => r.user_id).filter(Boolean)));
+  const profileMap: Record<string, { fullName: string; avatarUrl?: string; yearLevel?: string }> = {};
+
+  if (userIds.length > 0) {
+    try {
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, year_level')
+        .in('id', userIds);
+
+      if (profilesData) {
+        profilesData.forEach((p) => {
+          profileMap[p.id] = {
+            fullName: p.full_name,
+            avatarUrl: p.avatar_url || undefined,
+            yearLevel: p.year_level || undefined,
+          };
+        });
+      }
+    } catch (err) {
+      console.warn('Error fetching buyer profiles for conversations:', err);
+    }
+  }
+
+  return (data || []).map((row) => {
+    const profile = profileMap[row.user_id];
+    const resolvedBuyerName = profile?.fullName || inferStudentNameFromId(row.user_id);
+    const resolvedBuyerAvatar = profile?.avatarUrl;
+    const resolvedBuyerYear = profile?.yearLevel || 'Verified Student';
+
+    return {
+      id: row.id,
+      itemId: row.item_id,
+      userId: row.user_id,
+      buyerName: resolvedBuyerName,
+      buyerAvatarUri: resolvedBuyerAvatar,
+      buyerYear: resolvedBuyerYear,
+      sellerName: row.seller_name,
+      sellerYear: row.seller_year,
+      itemTitle: row.item_title,
+      price: row.price !== null ? Number(row.price) : null,
+      tradeType: row.trade_type as 'buy' | 'swap' | 'free',
+      lastMessage: row.last_message || '',
+      timestamp: formatConversationTime(row.updated_at || row.timestamp),
+      unreadCount: row.unread_count || 0,
+      safeMeetupSpot: row.safe_meetup_spot,
+      sellerAvatarUri: row.seller_avatar_uri,
+    };
+  });
 }
 
 export async function saveChatConversationToSupabase(conv: any, userId: string = 'user_active_student') {
+  const currentFormattedTime = formatConversationTime(new Date());
   const payload = {
     id: conv.id,
     item_id: conv.itemId,
@@ -310,7 +365,7 @@ export async function saveChatConversationToSupabase(conv: any, userId: string =
     price: conv.price ?? null,
     trade_type: conv.tradeType || 'buy',
     last_message: conv.lastMessage || '',
-    timestamp: conv.timestamp || 'Just now',
+    timestamp: conv.timestamp && conv.timestamp !== 'Just now' ? conv.timestamp : currentFormattedTime,
     unread_count: conv.unreadCount || 0,
     safe_meetup_spot: conv.safeMeetupSpot || 'Main Library Ground Floor',
     seller_avatar_uri: conv.sellerAvatarUri || null,
@@ -335,28 +390,30 @@ export async function fetchChatMessagesFromSupabase(itemId: string) {
 
   return (data || []).map((row) => ({
     id: row.id,
-    sender: row.sender as 'me' | 'seller' | 'system',
+    sender: row.sender as 'me' | 'seller' | 'buyer' | 'system',
     text: row.text || undefined,
     imageUri: row.image_uri || undefined,
-    timestamp: row.timestamp || 'Just now',
+    timestamp: formatMessageTime(row.created_at || row.timestamp),
+    createdAt: row.created_at,
   }));
 }
 
 export async function saveChatMessageToSupabase(msg: {
   id: string;
   itemId: string;
-  sender: 'me' | 'seller' | 'system';
+  sender: 'me' | 'seller' | 'buyer' | 'system';
   text?: string;
   imageUri?: string;
   timestamp?: string;
 }) {
+  const currentFormattedTime = formatMessageTime(new Date());
   const payload = {
     id: msg.id,
     item_id: msg.itemId,
     sender: msg.sender,
     text: msg.text || null,
     image_uri: msg.imageUri || null,
-    timestamp: msg.timestamp || 'Just now',
+    timestamp: msg.timestamp && msg.timestamp !== 'Just now' ? msg.timestamp : currentFormattedTime,
   };
 
   const { error } = await supabase.from('chat_messages').upsert(payload, { onConflict: 'id' });

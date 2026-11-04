@@ -47,11 +47,13 @@ export default function ChatScreen() {
   const {
     id,
     sellerName: paramSellerName,
+    buyerName: paramBuyerName,
     itemTitle: paramItemTitle,
     offeredItem: paramOfferedItem,
   } = useLocalSearchParams<{
     id: string;
     sellerName?: string;
+    buyerName?: string;
     itemTitle?: string;
     offeredItem?: string;
   }>();
@@ -61,8 +63,13 @@ export default function ChatScreen() {
   const flatListRef = useRef<FlatList<Message>>(null);
   const initialScrollDoneRef = useRef(false);
 
-  const { getMessages, sendMessage, addSystemMessage, isTypingByItemId } =
-    useChat();
+  const {
+    conversations,
+    getMessages,
+    sendMessage,
+    addSystemMessage,
+    isTypingByItemId,
+  } = useChat();
   const { items, getItemById } = useItems();
 
   const foundItem = getItemById(id) || items.find((i) => i.id === id);
@@ -86,33 +93,48 @@ export default function ChatScreen() {
   const isFree = item.tradeType === 'free';
   const isBuy = item.tradeType === 'buy';
 
-  // Guard: Owner attempting to chat on their own item
+  // Active user profile state to determine viewer role (Buyer vs Seller)
+  const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string } | null>(null);
+
   useEffect(() => {
     AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
-      let currentUserName = '';
-      let currentUserId = '';
       if (str) {
         try {
           const parsed = JSON.parse(str);
-          if (parsed.id) currentUserId = parsed.id;
-          if (parsed.fullName) currentUserName = parsed.fullName.trim().toLowerCase();
+          setCurrentUser({
+            id: parsed.id || '',
+            fullName: parsed.fullName ? parsed.fullName.trim() : '',
+          });
         } catch {}
       }
-
-      const isOwner = Boolean(
-        (currentUserId && item?.sellerId && item.sellerId === currentUserId) ||
-        (currentUserName && item?.sellerName && item.sellerName.trim().toLowerCase() === currentUserName)
-      );
-
-      if (isOwner) {
-        Alert.alert(
-          'Your Own Listing',
-          'You cannot start a purchase or swap chat with yourself.',
-          [{ text: 'Go Back', onPress: () => router.back() }]
-        );
-      }
     });
-  }, [item, router]);
+  }, []);
+
+  const isViewerSeller = useMemo(() => {
+    if (!currentUser) return false;
+    const matchesId = Boolean(currentUser.id && item?.sellerId && item.sellerId === currentUser.id);
+    const matchesName = Boolean(
+      currentUser.fullName &&
+      item?.sellerName &&
+      item.sellerName.trim().toLowerCase() === currentUser.fullName.toLowerCase()
+    );
+    return matchesId || matchesName;
+  }, [currentUser, item]);
+
+  const matchedConv = useMemo(
+    () => conversations.find((c) => c.itemId === id),
+    [conversations, id]
+  );
+
+  const counterpartDisplayName = isViewerSeller
+    ? (paramBuyerName || matchedConv?.buyerName || 'Campus Student')
+    : sellerDisplayName;
+  const counterpartSubtitle = isViewerSeller
+    ? `${matchedConv?.buyerYear || 'Verified Student'} · Inquiring Buyer`
+    : `${item.sellerYear || 'Verified Student'} · Verified Peer`;
+  const counterpartAvatarUri = isViewerSeller
+    ? matchedConv?.buyerAvatarUri
+    : item.sellerAvatarUri;
 
   const messages = getMessages(id, item);
   const isTyping = isTypingByItemId[id] || false;
@@ -363,9 +385,9 @@ export default function ChatScreen() {
           <Ionicons name="arrow-back" size={22} color={theme.text} />
         </Pressable>
 
-        {item.sellerAvatarUri ? (
+        {counterpartAvatarUri ? (
           <Image
-            source={{ uri: item.sellerAvatarUri }}
+            source={{ uri: counterpartAvatarUri }}
             style={styles.headerAvatar}
             contentFit="cover"
           />
@@ -385,7 +407,7 @@ export default function ChatScreen() {
                 fontWeight: '700',
                 color: theme.primary,
               }}>
-              {sellerDisplayName.charAt(0)}
+              {counterpartDisplayName.charAt(0).toUpperCase()}
             </Text>
           </View>
         )}
@@ -395,14 +417,14 @@ export default function ChatScreen() {
             <Text
               numberOfLines={1}
               style={[styles.sellerName, { color: theme.text }]}>
-              {sellerDisplayName}
+              {counterpartDisplayName}
             </Text>
             <Ionicons name="checkmark-circle" size={14} color={theme.primary} />
           </View>
           <Text
             numberOfLines={1}
             style={[styles.sellerSubtitle, { color: theme.textSecondary }]}>
-            {item.sellerYear} · Verified Student
+            {counterpartSubtitle}
           </Text>
         </View>
       </View>
@@ -451,8 +473,8 @@ export default function ChatScreen() {
           </Text>
         </View>
 
-        {/* Quick action in bar depending on deal type */}
-        {isBuy && item.price && (
+        {/* Quick action in bar depending on deal type & viewer role */}
+        {!isViewerSeller && isBuy && item.price && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`Pay ₱${item.price}`}
@@ -471,6 +493,20 @@ export default function ChatScreen() {
             }>
             <Text style={styles.actionPillButtonText}>Pay Escrow</Text>
           </Pressable>
+        )}
+
+        {isViewerSeller && isBuy && (
+          <View
+            style={[
+              styles.actionPillButton,
+              {
+                backgroundColor: theme.surfaceSubtle,
+                borderWidth: 1,
+                borderColor: theme.border,
+              },
+            ]}>
+            <Text style={[styles.actionPillButtonText, { color: theme.textSecondary }]}>Your Item</Text>
+          </View>
         )}
 
         {isSwap && agreementStatus === 'pending' && (
@@ -521,7 +557,7 @@ export default function ChatScreen() {
           </Pressable>
         )}
 
-        {agreementStatus === 'completed' && (
+        {!isViewerSeller && agreementStatus === 'completed' && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Rate seller 1 to 5 stars"
@@ -584,7 +620,7 @@ export default function ChatScreen() {
                       styles.typingText,
                       { color: theme.textSecondary },
                     ]}>
-                    {sellerDisplayName} is typing...
+                    {counterpartDisplayName} is typing...
                   </Text>
                 </View>
               </View>
@@ -839,7 +875,7 @@ export default function ChatScreen() {
                         styles.confirmedNoticeText,
                         { color: theme.textSecondary },
                       ]}>
-                      Meet {sellerDisplayName} at {item.safeMeetupSpot}. Once
+                      Meet {counterpartDisplayName} at {item.safeMeetupSpot}. Once
                       retrieved and inspected, tap below to confirm.
                     </Text>
                   </View>
@@ -886,8 +922,8 @@ export default function ChatScreen() {
                     </Text>
                   </View>
 
-                  {/* Rating summary or call to rate */}
-                  {hasRatedSeller && sellerRatingScore ? (
+                  {/* Rating summary or call to rate (buyer only) */}
+                  {!isViewerSeller && (hasRatedSeller && sellerRatingScore ? (
                     <View
                       style={[
                         styles.ratedSummaryBox,
@@ -963,7 +999,7 @@ export default function ChatScreen() {
                         Rate {sellerDisplayName} (1–5 Stars)
                       </Text>
                     </Pressable>
-                  )}
+                  ))}
                 </View>
               )}
             </View>
@@ -1000,7 +1036,9 @@ export default function ChatScreen() {
             );
           }
 
-          const isMe = msg.sender === 'me';
+          const isMe = isViewerSeller
+            ? msg.sender === 'seller'
+            : (msg.sender === 'me' || msg.sender === 'buyer');
           return (
             <View
               style={[

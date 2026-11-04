@@ -13,18 +13,24 @@ import {
   saveChatConversationToSupabase,
   saveChatMessageToSupabase,
 } from '@/lib/database';
+import { formatConversationTime, formatMessageTime } from '@/utils/format-time';
 
 export interface Message {
   id: string;
-  sender: 'me' | 'seller' | 'system';
+  sender: 'me' | 'seller' | 'buyer' | 'system';
   text?: string;
   imageUri?: string;
   timestamp: string;
+  createdAt?: string;
 }
 
 export interface ChatConversation {
   id: string;
   itemId: string;
+  userId?: string;
+  buyerName?: string;
+  buyerAvatarUri?: string;
+  buyerYear?: string;
   sellerName: string;
   sellerYear: string;
   itemTitle: string;
@@ -59,6 +65,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [messagesByItemId, setMessagesByItemId] = useState<Record<string, Message[]>>({});
   const [isTypingByItemId, setIsTypingByItemId] = useState<Record<string, boolean>>({});
+  const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string } | null>(null);
 
   const refreshConversations = useCallback(async () => {
     try {
@@ -70,6 +77,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           const parsed = JSON.parse(stored);
           if (parsed.fullName) sellerName = parsed.fullName.trim();
           if (parsed.id) activeUserId = parsed.id;
+          setCurrentUser({
+            id: activeUserId,
+            fullName: sellerName,
+          });
         }
       } catch {}
 
@@ -92,6 +103,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             const parsed = JSON.parse(stored);
             if (parsed.fullName) sellerName = parsed.fullName.trim();
             if (parsed.id) activeUserId = parsed.id;
+            if (isMounted) {
+              setCurrentUser({
+                id: activeUserId,
+                fullName: sellerName,
+              });
+            }
           } catch {}
         }
         return fetchChatConversationsFromSupabase(activeUserId, sellerName);
@@ -136,7 +153,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             : itemMeta?.tradeType === 'free'
             ? `Hi! Glad someone can make use of the ${title}! It's completely free for campus pickup at ${spot}.`
             : `Hi! Thanks for checking out the ${title}. It's still available for meetup at ${spot}. Feel free to ask any questions!`,
-        timestamp: 'Just now',
+        timestamp: formatMessageTime(new Date()),
       };
 
       return [initialGreeting];
@@ -151,11 +168,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const addSystemMessage = useCallback((itemId: string, text: string) => {
+    const formattedNow = formatMessageTime(new Date());
     const sysMsg: Message = {
       id: `sys-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       sender: 'system',
       text,
-      timestamp: 'Just now',
+      timestamp: formattedNow,
     };
 
     setMessagesByItemId((prev) => {
@@ -171,7 +189,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       itemId,
       sender: 'system',
       text,
-      timestamp: 'Just now',
+      timestamp: formattedNow,
     }).catch((err) => console.warn('Supabase save system message error:', err));
   }, []);
 
@@ -187,13 +205,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const newConv: ChatConversation = {
       id: conversationId,
       itemId: item.id,
+      userId: currentUser?.id || 'user_active_student',
+      buyerName: currentUser?.fullName || 'Campus Student',
       sellerName: item.sellerName || 'Campus Student',
       sellerYear: item.sellerYear || 'Verified Student',
       itemTitle: item.title,
       price: item.price ?? null,
       tradeType: item.tradeType || 'buy',
       lastMessage: initialGreeting,
-      timestamp: 'Just now',
+      timestamp: formatConversationTime(new Date()),
       unreadCount: 0,
       safeMeetupSpot: item.safeMeetupSpot || 'Main Library Ground Floor',
       sellerAvatarUri: item.sellerAvatarUri,
@@ -221,7 +241,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       );
 
     return newConv;
-  }, []);
+  }, [currentUser]);
 
   const sendMessage = useCallback(
     (
@@ -247,12 +267,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           : '📷 Sent a photo'
         : trimmed;
 
+      const msgTimestamp = formatMessageTime(new Date());
+      const convTimestamp = formatConversationTime(new Date());
+
+      // Determine sender role: is active user the seller or buyer?
+      const isSeller = Boolean(
+        currentUser &&
+        ((currentUser.id && itemMeta?.sellerId && itemMeta.sellerId === currentUser.id) ||
+         (currentUser.fullName && itemMeta?.sellerName && itemMeta.sellerName.trim().toLowerCase() === currentUser.fullName.toLowerCase()))
+      );
+      const senderRole: 'seller' | 'buyer' = isSeller ? 'seller' : 'buyer';
+
       const userMsg: Message = {
-        id: `msg-me-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        sender: 'me',
+        id: `msg-${senderRole}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        sender: senderRole,
         text: trimmed || undefined,
         imageUri: imageUri || undefined,
-        timestamp: 'Just now',
+        timestamp: msgTimestamp,
+        createdAt: new Date().toISOString(),
       };
 
       // 1. Update messages immediately in local state
@@ -268,10 +300,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       saveChatMessageToSupabase({
         id: userMsg.id,
         itemId,
-        sender: 'me',
+        sender: senderRole,
         text: userMsg.text,
         imageUri: userMsg.imageUri,
-        timestamp: 'Just now',
+        timestamp: msgTimestamp,
       }).catch((err) => console.warn('Supabase save user message error:', err));
 
       // 3. Update / bump conversation in the inbox list
@@ -279,21 +311,33 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const updatedConv: ChatConversation = {
         id: conversationId,
         itemId,
+        userId: isSeller ? (itemMeta as any)?.buyerId : currentUser?.id || 'user_active_student',
+        buyerName: isSeller ? (itemMeta as any)?.buyerName : currentUser?.fullName,
+        buyerAvatarUri: (itemMeta as any)?.buyerAvatarUri,
+        buyerYear: (itemMeta as any)?.buyerYear,
         sellerName: itemMeta?.sellerName || 'Campus Student',
         sellerYear: itemMeta?.sellerYear || 'Verified Student',
         itemTitle: itemMeta?.title || 'Marketplace Item',
         price: itemMeta?.price ?? null,
         tradeType: itemMeta?.tradeType || 'buy',
         lastMessage: previewText,
-        timestamp: 'Just now',
+        timestamp: convTimestamp,
         unreadCount: 0,
         safeMeetupSpot: itemMeta?.safeMeetupSpot || 'Main Library Ground Floor',
         sellerAvatarUri: itemMeta?.sellerAvatarUri,
       };
 
       setConversations((prev) => {
+        const existingConv = prev.find((c) => c.itemId === itemId);
+        const mergedConv: ChatConversation = {
+          ...updatedConv,
+          userId: updatedConv.userId || existingConv?.userId,
+          buyerName: updatedConv.buyerName || existingConv?.buyerName,
+          buyerAvatarUri: updatedConv.buyerAvatarUri || existingConv?.buyerAvatarUri,
+          buyerYear: updatedConv.buyerYear || existingConv?.buyerYear,
+        };
         const rest = prev.filter((c) => c.itemId !== itemId);
-        return [updatedConv, ...rest];
+        return [mergedConv, ...rest];
       });
 
       // Persist conversation to Supabase with the active user's ID
@@ -395,11 +439,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               reply = `Got it! Thanks for letting me know. Let's meet at ${spot}!`;
             }
 
+            const peerMsgTimestamp = formatMessageTime(new Date());
+            const peerConvTimestamp = formatConversationTime(new Date());
+
             const peerMsg: Message = {
               id: `msg-peer-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
               sender: 'seller',
               text: reply,
-              timestamp: 'Just now',
+              timestamp: peerMsgTimestamp,
+              createdAt: new Date().toISOString(),
             };
 
             setMessagesByItemId((prev) => {
@@ -415,14 +463,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               itemId,
               sender: 'seller',
               text: reply,
-              timestamp: 'Just now',
+              timestamp: peerMsgTimestamp,
             }).catch((err) => console.warn('Supabase save peer message error:', err));
 
             // Update conversation with peer's reply
             const replyConv: ChatConversation = {
               ...updatedConv,
               lastMessage: reply,
-              timestamp: 'Just now',
+              timestamp: peerConvTimestamp,
             };
 
             setConversations((prev) => {
@@ -437,7 +485,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(() => {});
     },
-    [getMessages]
+    [getMessages, currentUser]
   );
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -7,6 +7,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -25,6 +26,21 @@ export default function ChatInboxScreen() {
   const { conversations, markAsRead } = useChat();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
+  const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string } | null>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+      if (str) {
+        try {
+          const parsed = JSON.parse(str);
+          setCurrentUser({
+            id: parsed.id || '',
+            fullName: parsed.fullName ? parsed.fullName.trim() : '',
+          });
+        } catch {}
+      }
+    });
+  }, []);
 
   const filteredConversations = conversations.filter((c) => {
     const matchesFilter =
@@ -175,19 +191,31 @@ export default function ChatInboxScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const initials = item.sellerName
+          const isUserTheSeller = Boolean(
+            currentUser &&
+            currentUser.fullName &&
+            item.sellerName &&
+            item.sellerName.trim().toLowerCase() === currentUser.fullName.toLowerCase()
+          );
+
+          const counterpartName = isUserTheSeller
+            ? (item.buyerName || 'Campus Student')
+            : item.sellerName;
+
+          const initials = counterpartName
             .split(' ')
             .map((n) => n[0])
             .join('')
-            .toUpperCase();
+            .toUpperCase() || 'C';
 
+          const avatarUri = isUserTheSeller ? item.buyerAvatarUri : item.sellerAvatarUri;
           const isSwap = item.tradeType === 'swap';
           const isFree = item.tradeType === 'free';
 
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Open chat with ${item.sellerName}`}
+              accessibilityLabel={`Open chat with ${counterpartName}`}
               style={({ pressed }) => [
                 styles.conversationCard,
                 {
@@ -203,6 +231,7 @@ export default function ChatInboxScreen() {
                   params: {
                     id: item.itemId,
                     sellerName: item.sellerName,
+                    buyerName: isUserTheSeller ? counterpartName : undefined,
                     itemTitle: item.itemTitle,
                     price: item.price !== null ? item.price.toString() : '0',
                   },
@@ -214,9 +243,9 @@ export default function ChatInboxScreen() {
                   styles.avatar,
                   { backgroundColor: theme.surfaceSubtle },
                 ]}>
-                {item.sellerAvatarUri ? (
+                {avatarUri ? (
                   <Image
-                    source={{ uri: item.sellerAvatarUri }}
+                    source={{ uri: avatarUri }}
                     style={styles.avatarImage}
                     contentFit="cover"
                     transition={200}
@@ -235,13 +264,29 @@ export default function ChatInboxScreen() {
                     <Text
                       numberOfLines={1}
                       style={[styles.sellerName, { color: theme.text }]}>
-                      {item.sellerName}
+                      {counterpartName}
                     </Text>
                     <Ionicons
                       name="checkmark-circle"
                       size={14}
                       color={theme.primary}
                     />
+                    {isUserTheSeller && (
+                      <View
+                        style={{
+                          backgroundColor: theme.surfaceSubtle,
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                          borderRadius: Radius.full,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          marginLeft: 4,
+                        }}>
+                        <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>
+                          Buyer
+                        </Text>
+                      </View>
+                    )}
                   </View>
                   <Text
                     style={[styles.timestamp, { color: theme.textSecondary }]}>

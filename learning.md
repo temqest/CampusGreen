@@ -472,3 +472,31 @@ This document captures project-specific design standards, user preferences, and 
 - **Zero In-Memory Ownership Mutation**: Never stamp runtime flags like `(newItem as any).isOwner = true` onto item data models. Ownership is not an intrinsic property of a product; it is strictly a relational equality check between the active authenticated user and the item's creator (`currentUserId === item.sellerId || currentUserName.toLowerCase() === item.sellerName.toLowerCase()`).
 - **Zero `(item as any).isOwner === true` Bypass Checks**: Delete all fallback checks to `(item as any).isOwner === true` across `item/[id].tsx`, `payment/[id].tsx`, `item-card.tsx`, `chat/[id].tsx`, `profile.tsx`, and `marketplace.tsx`. These bypass checks cause items created in a previous session to falsely identify any subsequent logged-in user as the owner.
 - **Session Cleanup & Reactive Feed Synchronization**: On user sign-out in `profile.tsx`, reset local user states, clear `@campusgreen_user_profile`, and trigger `refreshItems()` on `ItemsContext`. In `marketplace.tsx`, trigger `refreshItems()` on screen focus (`useFocusEffect`) so switching accounts always loads clean, unpolluted data from Supabase.
+
+### 36. Peer-to-Peer Chat Role Separation & Real-Time Timestamps
+- **Chat Access Invariant (Zero Owner Blocker in Chat Screen)**:
+  - Guarding against self-purchase belongs exclusively to product browsing/checkout surfaces (`item/[id].tsx`), where the buy/chat CTA is replaced by `"Your Listing"`.
+  - Never place a blanket `isOwner` alert or redirect inside `chat/[id].tsx`. When a prospective buyer contacts a seller, the seller must be able to open that thread and converse with the buyer without being booted out by an alert claiming they are chatting with themselves.
+- **Role-Adaptive Chat Viewports**:
+  - The chat screen must dynamically determine `isViewerSeller`:
+    `isViewerSeller = Boolean((currentUserId && item.sellerId === currentUserId) || (currentUserName && item.sellerName.toLowerCase() === currentUserName.toLowerCase()))`.
+  - The chat header must always display the **counterpart's identity**:
+    - If `isViewerSeller`: display the prospective buyer's name, avatar/initials, and subtitle (`"Campus Buyer · Verified Student"`).
+    - If `!isViewerSeller`: display the seller's name and verification credentials.
+  - Quick action buttons adapt based on role:
+    - Buyers receive buyer actions (`"Pay Escrow"`, `"Rate Seller"`).
+    - Sellers never receive prompts to pay escrow for their own item or rate themselves.
+- **Role-Relative Bubble Alignment**:
+  - Never hardcode bubble alignment to static `'me'` strings. In peer-to-peer messaging, align bubbles based on the viewer's role:
+    `const isMe = isViewerSeller ? msg.sender === 'seller' : (msg.sender === 'me' || msg.sender === 'buyer')`.
+  - Outgoing messages consistently align to the right in brand primary green (`#10B981`); incoming messages consistently align to the left in card surface neutral.
+- **Dynamic Real-World Timestamps Over Hardcoded "Just now"**:
+  - Never hardcode `"Just now"` strings on newly created messages, database payloads, or conversation lists.
+  - Capture real time on send via `formatMessageTime(new Date())` (e.g., `"6:18 PM"`).
+  - When fetching from Supabase, parse `row.created_at || row.timestamp` through `formatMessageTime` so historical records gracefully resolve to their real creation timestamp rather than displaying stagnant placeholder strings.
+- **Real Buyer Identity Resolution Over Generic "Campus Buyer" Placeholders**:
+  - In `fetchChatConversationsFromSupabase`, batch-query Supabase's `profiles` table matching `chat_conversations.user_id` to resolve the real student's `full_name`, `avatar_url`, and `year_level`.
+  - Provide an automatic fall-through to `inferStudentNameFromId(userId)` (e.g. `user_maria_clara` -> `"Maria Clara"`) and pass `buyerName: currentUser.fullName` across navigation paths (`item/[id].tsx`, `(tabs)/chat.tsx`).
+  - Both the chat inbox and chat thread must display the student's actual name, avatar, and year instead of a generic `"Campus Buyer"` placeholder.
+
+

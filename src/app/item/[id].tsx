@@ -43,6 +43,7 @@ export default function ItemDetailScreen() {
 
   const [currentUserId, setCurrentUserId] = useState('');
   const [currentUserName, setCurrentUserName] = useState('');
+  const [currentUserFullName, setCurrentUserFullName] = useState('');
   const [swapModalVisible, setSwapModalVisible] = useState(false);
   const [offeredTradeItem, setOfferedTradeItem] = useState('');
 
@@ -52,7 +53,10 @@ export default function ItemDetailScreen() {
         try {
           const parsed = JSON.parse(str);
           if (parsed.id) setCurrentUserId(parsed.id);
-          if (parsed.fullName) setCurrentUserName(parsed.fullName.trim().toLowerCase());
+          if (parsed.fullName) {
+            setCurrentUserName(parsed.fullName.trim().toLowerCase());
+            setCurrentUserFullName(parsed.fullName.trim());
+          }
         } catch {}
       }
     });
@@ -647,7 +651,10 @@ export default function ItemDetailScreen() {
                 ensureConversation(item);
                 router.push({
                   pathname: '/chat/[id]',
-                  params: { id: item.id },
+                  params: {
+                    id: item.id,
+                    buyerName: currentUserFullName || undefined,
+                  },
                 });
               }}>
               <Ionicons
@@ -711,7 +718,10 @@ export default function ItemDetailScreen() {
               ensureConversation(item);
               router.push({
                 pathname: '/chat/[id]',
-                params: { id: item.id },
+                params: {
+                  id: item.id,
+                  buyerName: currentUserFullName || undefined,
+                },
               });
             }}>
             <Ionicons name="chatbubbles-outline" size={18} color="#FFFFFF" />
@@ -816,6 +826,7 @@ export default function ItemDetailScreen() {
                   params: {
                     id: item.id,
                     offeredItem: offered,
+                    buyerName: currentUserFullName || undefined,
                   },
                 });
               }}>
