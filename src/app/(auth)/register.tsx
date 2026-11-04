@@ -53,11 +53,14 @@ export default function RegisterScreen() {
       setErrorMessage('Only institutional .edu student emails are accepted (e.g., student@adnu.edu.ph or @school.edu).');
       return;
     }
-    if (password.length < 6) {
+    const trimmedPassword = password.trim();
+    const trimmedConfirmPassword = confirmPassword.trim();
+
+    if (trimmedPassword.length < 6) {
       setErrorMessage('Password must be at least 6 characters.');
       return;
     }
-    if (password !== confirmPassword) {
+    if (trimmedPassword !== trimmedConfirmPassword) {
       setErrorMessage('Passwords do not match.');
       return;
     }
@@ -223,9 +226,15 @@ export default function RegisterScreen() {
                   placeholder="At least 6 characters"
                   placeholderTextColor={theme.textMuted}
                   value={password}
-                  onChangeText={setPassword}
+                  onChangeText={(val) => {
+                    setPassword(val);
+                    if (errorMessage) setErrorMessage('');
+                  }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
                 />
                 <Pressable
                   accessibilityRole="button"
@@ -263,9 +272,15 @@ export default function RegisterScreen() {
                   placeholder="Re-enter your password"
                   placeholderTextColor={theme.textMuted}
                   value={confirmPassword}
-                  onChangeText={setConfirmPassword}
+                  onChangeText={(val) => {
+                    setConfirmPassword(val);
+                    if (errorMessage) setErrorMessage('');
+                  }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
+                  autoCorrect={false}
+                  textContentType="newPassword"
+                  autoComplete="new-password"
                 />
               </View>
             </View>

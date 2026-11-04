@@ -24,6 +24,7 @@ import { useItems } from '@/context/items-context';
 import { EscrowTransaction } from '@/types/item';
 import { supabase } from '@/lib/supabase';
 import { fetchProfileFromSupabase, saveProfileToSupabase } from '@/lib/database';
+import { ConfirmationModal, ConfirmationType } from '@/components/confirmation-modal';
 
 const GCASH_LOGO = require('@/assets/gcash.svg');
 const MAYA_LOGO = require('@/assets/maya.svg');
@@ -92,6 +93,23 @@ export default function SettingsScreen() {
 
   // Action feedback toast
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
+
+  // Custom Confirmation Dialog State (Replaces generic white system alert)
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    type?: ConfirmationType;
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    iconName?: keyof typeof Ionicons.glyphMap;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
 
   // Load user profile on mount
   useEffect(() => {
@@ -235,25 +253,28 @@ export default function SettingsScreen() {
     setSubSuccess(null);
   };
 
-  // Log Out confirmation
+  // Log Out confirmation (Using Custom Branded Modal)
   const handleSignOut = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out of your student account?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await AsyncStorage.removeItem('@campusgreen_user_profile');
-            await supabase.auth.signOut().catch(() => {});
-            await refreshItems().catch(() => {});
-          } catch (e) {
-            console.warn('Error clearing profile on logout:', e);
-          }
-          router.replace('/(auth)/login');
-        },
+    setConfirmConfig({
+      visible: true,
+      type: 'danger',
+      title: 'Log Out?',
+      description: 'Are you sure you want to log out of your student account? You will need to log back in with your university credentials.',
+      confirmLabel: 'Log Out',
+      cancelLabel: 'Stay Signed In',
+      iconName: 'log-out-outline',
+      onConfirm: async () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        try {
+          await AsyncStorage.removeItem('@campusgreen_user_profile');
+          await supabase.auth.signOut().catch(() => {});
+          await refreshItems().catch(() => {});
+        } catch (e) {
+          console.warn('Error clearing profile on logout:', e);
+        }
+        router.replace('/(auth)/login');
       },
-    ]);
+    });
   };
 
   return (
@@ -1379,23 +1400,22 @@ export default function SettingsScreen() {
                         accessibilityLabel="Cancel active subscription"
                         style={{ alignItems: 'center', marginTop: 12, paddingVertical: 6 }}
                         onPress={() => {
-                          Alert.alert(
-                            'Cancel Subscription',
-                            'Are you sure you want to cancel your Campus Boost subscription? Your remaining bumps and badges will be cleared.',
-                            [
-                              { text: 'Keep Plan', style: 'cancel' },
-                              {
-                                text: 'Cancel Plan',
-                                style: 'destructive',
-                                onPress: () => {
-                                  cancelSubscription();
-                                  handleCloseSubscriptionModal();
-                                  setActionFeedback('Subscription cancelled.');
-                                  setTimeout(() => setActionFeedback(null), 3000);
-                                },
-                              },
-                            ]
-                          );
+                          setConfirmConfig({
+                            visible: true,
+                            type: 'warning',
+                            title: 'Cancel Campus Boost?',
+                            description: 'Are you sure you want to cancel your Campus Boost subscription? Your remaining bumps and badges will be cleared immediately.',
+                            confirmLabel: 'Cancel Plan',
+                            cancelLabel: 'Keep Plan',
+                            iconName: 'alert-circle-outline',
+                            onConfirm: () => {
+                              setConfirmConfig((prev) => ({ ...prev, visible: false }));
+                              cancelSubscription();
+                              handleCloseSubscriptionModal();
+                              setActionFeedback('Subscription cancelled.');
+                              setTimeout(() => setActionFeedback(null), 3000);
+                            },
+                          });
                         }}>
                         <Text style={{ fontSize: 13, color: theme.error, fontWeight: '600' }}>
                           Cancel Campus Boost Subscription
@@ -1518,6 +1538,19 @@ export default function SettingsScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ================= CUSTOM THEMED CONFIRMATION MODAL ================= */}
+      <ConfirmationModal
+        visible={confirmConfig.visible}
+        type={confirmConfig.type}
+        title={confirmConfig.title}
+        description={confirmConfig.description}
+        confirmLabel={confirmConfig.confirmLabel}
+        cancelLabel={confirmConfig.cancelLabel}
+        iconName={confirmConfig.iconName}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

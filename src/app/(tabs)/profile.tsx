@@ -29,6 +29,7 @@ import {
   formatShortName,
   saveProfileToSupabase,
 } from '@/lib/database';
+import { ConfirmationModal, ConfirmationType } from '@/components/confirmation-modal';
 
 const GCASH_LOGO = require('@/assets/gcash.svg');
 const MAYA_LOGO = require('@/assets/maya.svg');
@@ -129,6 +130,23 @@ export default function ProfileScreen() {
 
   // Student purchases/orders backed by Supabase
   const [studentPurchases, setStudentPurchases] = useState<any[]>([]);
+
+  // Custom Confirmation Dialog State (Replaces generic system Alert.alert)
+  const [confirmConfig, setConfirmConfig] = useState<{
+    visible: boolean;
+    type?: ConfirmationType;
+    title: string;
+    description: string;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    iconName?: keyof typeof Ionicons.glyphMap;
+    onConfirm: () => void;
+  }>({
+    visible: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
 
   // Load profile from local storage and Supabase on mount
   useEffect(() => {
@@ -359,25 +377,24 @@ export default function ProfileScreen() {
     setTimeout(() => setActionFeedback(null), 3000);
   };
 
-  // Handle Delete Confirmation
+  // Handle Delete Confirmation (Using Custom Branded Modal)
   const handleDeleteConfirm = (item: MarketplaceItem) => {
-    Alert.alert(
-      'Remove Listing',
-      `Are you sure you want to remove "${item.title}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => {
-            deleteItem(item.id);
-            setManageItem(null);
-            setActionFeedback('Listing removed.');
-            setTimeout(() => setActionFeedback(null), 3000);
-          },
-        },
-      ]
-    );
+    setConfirmConfig({
+      visible: true,
+      type: 'danger',
+      title: 'Remove Listing?',
+      description: `Are you sure you want to delete "${item.title}"? This listing will be permanently removed from the campus marketplace.`,
+      confirmLabel: 'Remove Listing',
+      cancelLabel: 'Keep Item',
+      iconName: 'trash-outline',
+      onConfirm: () => {
+        setConfirmConfig((prev) => ({ ...prev, visible: false }));
+        deleteItem(item.id);
+        setManageItem(null);
+        setActionFeedback('Listing removed from campus marketplace.');
+        setTimeout(() => setActionFeedback(null), 3000);
+      },
+    });
   };
 
   // Preset Amount Selection
@@ -1913,23 +1930,22 @@ export default function ProfileScreen() {
                         accessibilityLabel="Cancel active subscription"
                         style={{ alignItems: 'center', marginTop: 12, paddingVertical: 6 }}
                         onPress={() => {
-                          Alert.alert(
-                            'Cancel Subscription',
-                            'Are you sure you want to cancel your Campus Boost subscription? Your remaining bumps and badges will be cleared.',
-                            [
-                              { text: 'Keep Plan', style: 'cancel' },
-                              {
-                                text: 'Cancel Plan',
-                                style: 'destructive',
-                                onPress: () => {
-                                  cancelSubscription();
-                                  handleCloseSubscriptionModal();
-                                  setActionFeedback('Subscription cancelled.');
-                                  setTimeout(() => setActionFeedback(null), 3000);
-                                },
-                              },
-                            ]
-                          );
+                          setConfirmConfig({
+                            visible: true,
+                            type: 'warning',
+                            title: 'Cancel Campus Boost?',
+                            description: 'Are you sure you want to cancel your Campus Boost subscription? Your remaining bumps and badges will be cleared immediately.',
+                            confirmLabel: 'Cancel Plan',
+                            cancelLabel: 'Keep Plan',
+                            iconName: 'alert-circle-outline',
+                            onConfirm: () => {
+                              setConfirmConfig((prev) => ({ ...prev, visible: false }));
+                              cancelSubscription();
+                              handleCloseSubscriptionModal();
+                              setActionFeedback('Subscription cancelled.');
+                              setTimeout(() => setActionFeedback(null), 3000);
+                            },
+                          });
                         }}>
                         <Text style={{ fontSize: 13, color: theme.error, fontWeight: '600' }}>
                           Cancel Campus Boost Subscription
@@ -2561,6 +2577,19 @@ export default function ProfileScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* ================= 10. CUSTOM THEMED CONFIRMATION MODAL ================= */}
+      <ConfirmationModal
+        visible={confirmConfig.visible}
+        type={confirmConfig.type}
+        title={confirmConfig.title}
+        description={confirmConfig.description}
+        confirmLabel={confirmConfig.confirmLabel}
+        cancelLabel={confirmConfig.cancelLabel}
+        iconName={confirmConfig.iconName}
+        onConfirm={confirmConfig.onConfirm}
+        onCancel={() => setConfirmConfig((prev) => ({ ...prev, visible: false }))}
+      />
     </View>
   );
 }

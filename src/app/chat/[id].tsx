@@ -58,6 +58,8 @@ export default function ChatScreen() {
     escrowStatus: paramEscrowStatus,
     referenceCode: paramReferenceCode,
     orderId: paramOrderId,
+    buyerRating: paramBuyerRating,
+    sellerRating: paramSellerRating,
   } = useLocalSearchParams<{
     id: string;
     sellerName?: string;
@@ -71,6 +73,8 @@ export default function ChatScreen() {
     escrowStatus?: string;
     referenceCode?: string;
     orderId?: string;
+    buyerRating?: string;
+    sellerRating?: string;
   }>();
   const theme = useTheme();
   const router = useRouter();
@@ -87,7 +91,7 @@ export default function ChatScreen() {
     submitPeerRating,
     isTypingByItemId,
   } = useChat();
-  const { items, getItemById } = useItems();
+  const { items, getItemById, setItemStatus } = useItems();
 
   const foundItem = getItemById(id) || items.find((i) => i.id === id);
   const item = useMemo(
@@ -255,15 +259,34 @@ export default function ChatScreen() {
 
   const peerRatingScore = useMemo(() => {
     if (isViewerSeller) {
-      return matchedConv?.sellerRating ?? null;
+      return matchedConv?.sellerRating ?? (paramSellerRating ? Number(paramSellerRating) : null);
     } else {
-      return matchedConv?.buyerRating ?? null;
+      return matchedConv?.buyerRating ?? (paramBuyerRating ? Number(paramBuyerRating) : null);
     }
-  }, [isViewerSeller, matchedConv?.sellerRating, matchedConv?.buyerRating]);
+  }, [isViewerSeller, matchedConv?.sellerRating, matchedConv?.buyerRating, paramSellerRating, paramBuyerRating]);
 
   const hasRatedPeer = useMemo(() => {
     return Boolean(peerRatingScore && peerRatingScore > 0);
   }, [peerRatingScore]);
+
+  const openRatingModal = useCallback(() => {
+    if (hasRatedPeer && peerRatingScore) {
+      setSelectedStars(peerRatingScore);
+      const existingTags = isViewerSeller
+        ? matchedConv?.sellerRatingTags
+        : matchedConv?.buyerRatingTags;
+      setSelectedRatingTags(existingTags || []);
+      const existingComment = isViewerSeller
+        ? matchedConv?.sellerRatingComment
+        : matchedConv?.buyerRatingComment;
+      setRatingComment(existingComment || '');
+    } else {
+      setSelectedStars(0);
+      setSelectedRatingTags([]);
+      setRatingComment('');
+    }
+    setRatingModalVisible(true);
+  }, [hasRatedPeer, peerRatingScore, isViewerSeller, matchedConv]);
 
   const scrollToBottom = useCallback((animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
@@ -412,6 +435,9 @@ export default function ChatScreen() {
 
     addSystemMessage(id, confirmationText);
     await updateAgreementStatus(id, 'accepted', { referenceCode: passCode });
+    // Update listing state to reserved in local & remote marketplace store
+    setItemStatus(id, 'reserved');
+
     setTimeout(() => {
       scrollToBottom(true);
     }, 50);
@@ -447,6 +473,9 @@ export default function ChatScreen() {
       releaseEscrowToSeller(activeOrderId, sellerId, item.price, itemDisplayName).catch(() => {});
     }
 
+    // Update listing state to sold/claimed/swapped in marketplace and profile stores
+    setItemStatus(id, 'sold');
+
     setTimeout(() => {
       scrollToBottom(true);
     }, 50);
@@ -454,14 +483,15 @@ export default function ChatScreen() {
     // Prompt peer rating pop-up only if the active student has not yet rated
     if (!hasRatedPeer) {
       setTimeout(() => {
-        setRatingModalVisible(true);
+        openRatingModal();
       }, 380);
     }
   };
 
   const handleSubmitRating = async () => {
-    if (selectedStars === 0 || hasRatedPeer) return;
+    if (selectedStars === 0) return;
 
+    const wasAlreadyRated = hasRatedPeer;
     setRatingModalVisible(false);
 
     const starIcons = '★'.repeat(selectedStars) + '☆'.repeat(5 - selectedStars);
@@ -475,7 +505,9 @@ export default function ChatScreen() {
       ? ` · "${ratingComment.trim()}"`
       : '';
 
-    const reviewSummary = `⭐ You rated ${counterpartRoleLabel.toLowerCase()} ${counterpartDisplayName} ${starIcons} (${label})${tagsNote}${commentNote}. Verified peer review recorded!`;
+    const reviewSummary = wasAlreadyRated
+      ? `⭐ You updated your rating for ${counterpartRoleLabel.toLowerCase()} ${counterpartDisplayName} to ${starIcons} (${label})${tagsNote}${commentNote}. Verified review updated!`
+      : `⭐ You rated ${counterpartRoleLabel.toLowerCase()} ${counterpartDisplayName} ${starIcons} (${label})${tagsNote}${commentNote}. Verified peer review recorded!`;
 
     addSystemMessage(id, reviewSummary);
     await submitPeerRating(
@@ -776,7 +808,7 @@ export default function ChatScreen() {
                 opacity: pressed ? 0.85 : 1,
               },
             ]}
-            onPress={() => setRatingModalVisible(true)}>
+            onPress={openRatingModal}>
             <Text
               style={[
                 styles.actionPillButtonText,
@@ -1207,7 +1239,7 @@ export default function ChatScreen() {
                       <Pressable
                         accessibilityRole="button"
                         accessibilityLabel={`Update rating for ${counterpartDisplayName}`}
-                        onPress={() => setRatingModalVisible(true)}
+                        onPress={openRatingModal}
                         hitSlop={6}
                         style={styles.editRatingBtn}>
                         <Text
@@ -1231,7 +1263,7 @@ export default function ChatScreen() {
                           opacity: pressed ? 0.85 : 1,
                         },
                       ]}
-                      onPress={() => setRatingModalVisible(true)}>
+                      onPress={openRatingModal}>
                       <Ionicons name="star" size={16} color="#D97706" />
                       <Text style={styles.rateSellerPromptText}>
                         Rate {counterpartRoleLabel} ({counterpartDisplayName}) · 1–5 Stars
@@ -1596,7 +1628,7 @@ export default function ChatScreen() {
                 <Ionicons name="star" size={24} color="#F59E0B" />
               </View>
               <Text style={[styles.ratingTitle, { color: theme.text }]}>
-                Rate Your {counterpartRoleLabel}
+                {hasRatedPeer ? 'Update Your Rating' : `Rate Your ${counterpartRoleLabel}`}
               </Text>
               <Text
                 style={[
@@ -1748,6 +1780,8 @@ export default function ChatScreen() {
                 <Text style={styles.submitRatingBtnText}>
                   {selectedStars === 0
                     ? 'Select Stars to Submit'
+                    : hasRatedPeer
+                    ? `Update Rating (${selectedStars}/5)`
                     : `Submit ${selectedStars}/5 Rating`}
                 </Text>
               </Pressable>

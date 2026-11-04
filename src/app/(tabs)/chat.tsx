@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Pressable,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -26,7 +27,17 @@ export default function ChatInboxScreen() {
   const { conversations, markAsRead, refreshConversations } = useChat();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
+  const [refreshing, setRefreshing] = useState(false);
   const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string } | null>(null);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshConversations();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const loadProfile = useCallback(() => {
     AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
@@ -94,6 +105,14 @@ export default function ChatInboxScreen() {
           },
         ]}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[theme.primary]}
+            tintColor={theme.primary}
+          />
+        }
         ListHeaderComponent={
           <View style={styles.headerBlock}>
             {/* Organic In-Page Title */}
@@ -266,6 +285,8 @@ export default function ChatInboxScreen() {
                     agreementStatus: item.agreementStatus || 'pending',
                     escrowStatus: item.escrowStatus || 'none',
                     referenceCode: item.referenceCode || undefined,
+                    buyerRating: item.buyerRating !== undefined ? item.buyerRating.toString() : undefined,
+                    sellerRating: item.sellerRating !== undefined ? item.sellerRating.toString() : undefined,
                     itemTitle: item.itemTitle,
                     price: item.price !== null ? item.price.toString() : '0',
                   },

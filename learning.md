@@ -584,3 +584,24 @@ This document captures project-specific design standards, user preferences, and 
 - **Zero Duplicate Actions & Permanent Rating State**:
   - Once an agreement is marked completed, it remains permanently completed across app restarts, re-renders, and navigations.
   - Ratings are stored separately for buyer and seller (`buyerRating` vs `sellerRating`). Once recorded, the UI replaces the rating prompt with the persistent score badge (`★ X/5`), preventing repeated or self-ratings.
+
+### 31. Chat Item Flow Synchronization & Anti-Loop Rating Architecture
+- **Elimination of Asynchronous State Closure Traps (React 19 Batched State Rule)**:
+  - In React 19, never write mutating assignments (`let updatedToSave = updated`) inside `setState((prev) => ...)` and attempt to read them immediately after `setState()`.
+  - Updaters are batched and scheduled asynchronously by the React runtime, leaving outer variables `null` and silently aborting downstream persistence calls.
+  - Maintain a synchronized `conversationsRef` (`useRef(conversations)`) to compute updates deterministically, update state, and trigger async persistence (`saveChatConversationToSupabase` and `AsyncStorage`) reliably.
+- **Write-Through Local Caching for Chat Conversations**:
+  - Store chat conversations in `AsyncStorage` under `@campusgreen_chat_conversations`.
+  - Read from `AsyncStorage` on initial mount to provide instantaneous zero-latency rendering, followed by background Supabase synchronization.
+  - Write through to both `AsyncStorage` and Supabase on every state change (`ensureConversation`, `updateAgreementStatus`, `submitPeerRating`) so conversation state and ratings survive app restarts and screen refocuses even during network latency.
+- **Safe Conversation Initialization (`ensureConversation` Guard)**:
+  - Never blindly upsert a fresh default conversation payload to Supabase when a conversation for that item already exists.
+  - If a conversation already exists, return it intact (or merge explicit `extra` parameters). Overwriting existing rows with unrated/pending templates destroys verified reviews and completed agreement statuses.
+- **End-to-End Item Lifecycle Coupling in Chat Handover**:
+  - Peer chat actions must stay in lockstep with the marketplace inventory store:
+    1. **Agreement Acceptance (`handleAcceptAgreement`)**: When a Swap trade is accepted, Freebie confirmed, or Meetup plan agreed, immediately call `setItemStatus(id, 'reserved')`.
+    2. **Handover / Retrieval Completion (`handleCompleteAgreement`)**: When item handover or retrieval is confirmed, immediately call `setItemStatus(id, 'sold')`.
+    3. **Inventory & Discovery Synchronization**: Marking an item `sold` automatically moves it from "Active Listings" to "Sold Listings" in the student profile, updates Green Impact metrics (CO₂ diverted, items reused), and displays the appropriate `"Sold"` / `"Claimed"` / `"Swapped"` overlay across `ItemCard` and `item/[id].tsx`.
+- **Controlled Rating Updates Over Repeat Loop Creation**:
+  - Once a student rates their peer, block repeat automatic popups (`if (!hasRatedPeer)`).
+  - Tapping the completed review badge or "Edit Rating" allows updating their existing rating, pre-populating their selected stars, review tags, and comment, and emits an updated review message rather than flooding the chat with duplicate review notifications.

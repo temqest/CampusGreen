@@ -175,12 +175,18 @@ export function ItemCard({ item }: ItemCardProps) {
           </View>
         )}
 
-        {/* Reserved badge if applicable */}
-        {item.isReserved && (
+        {/* Dynamic Actionable State Overlay: Sold / Claimed / Swapped vs Reserved */}
+        {item.status === 'sold' ? (
+          <View style={[styles.reservedOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.72)' }]}>
+            <Text style={styles.reservedText}>
+              {item.tradeType === 'free' ? 'Claimed' : item.tradeType === 'swap' ? 'Swapped' : 'Sold'}
+            </Text>
+          </View>
+        ) : (item.isReserved || item.status === 'reserved') ? (
           <View style={[styles.reservedOverlay, { backgroundColor: 'rgba(0, 0, 0, 0.6)' }]}>
             <Text style={styles.reservedText}>Reserved</Text>
           </View>
-        )}
+        ) : null}
       </View>
 
       {/* Card Information */}

@@ -29,7 +29,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="marketplace"
         options={{
-          title: 'Marketplace',
+          title: 'Market',
           tabBarIcon: ({ focused }) => (
             <Ionicons
               name={focused ? 'storefront' : 'storefront-outline'}

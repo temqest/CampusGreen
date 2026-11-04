@@ -290,6 +290,28 @@ export default function ItemDetailScreen() {
                 <Text style={styles.bodyUrgentText}>URGENT SELLING</Text>
               </View>
             )}
+            {item.status === 'sold' && (
+              <View
+                style={[
+                  styles.bodyUrgentBadge,
+                  { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
+                ]}>
+                <Ionicons name="checkmark-done" size={11} color={theme.textSecondary} />
+                <Text style={[styles.bodyUrgentText, { color: theme.textSecondary }]}>
+                  {item.tradeType === 'free' ? 'CLAIMED' : item.tradeType === 'swap' ? 'SWAPPED' : 'SOLD'}
+                </Text>
+              </View>
+            )}
+            {item.status !== 'sold' && (item.isReserved || item.status === 'reserved') && (
+              <View
+                style={[
+                  styles.bodyUrgentBadge,
+                  { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' },
+                ]}>
+                <Ionicons name="time" size={11} color="#D97706" />
+                <Text style={[styles.bodyUrgentText, { color: '#B45309' }]}>RESERVED</Text>
+              </View>
+            )}
             <View
               style={[
                 styles.tradeTypePill,
@@ -605,6 +627,59 @@ export default function ItemDetailScreen() {
               </Text>
               <Text style={[styles.ownerBannerSubtitle, { color: theme.textSecondary }]}>
                 You listed this item. Manage it or see status in your Profile tab.
+              </Text>
+            </View>
+          </View>
+        ) : item.status === 'sold' ? (
+          <View style={styles.dockRow}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Chat with seller"
+              style={({ pressed }) => [
+                styles.chatSecondaryButton,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderColor: theme.border,
+                  opacity: pressed ? 0.75 : 1,
+                },
+              ]}
+              onPress={() => {
+                ensureConversation(item);
+                router.push({
+                  pathname: '/chat/[id]',
+                  params: {
+                    id: item.id,
+                    sellerName: item.sellerName,
+                    sellerAvatarUri: item.sellerAvatarUri || undefined,
+                    buyerName: currentUserFullName || undefined,
+                    isSeller: 'false',
+                  },
+                });
+              }}>
+              <Ionicons
+                name="chatbubbles-outline"
+                size={20}
+                color={theme.text}
+              />
+            </Pressable>
+
+            <View
+              style={[
+                styles.primaryCta,
+                styles.primaryCtaFlex,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderColor: theme.border,
+                  borderWidth: 1,
+                },
+              ]}>
+              <Ionicons name="checkmark-done-circle" size={18} color={theme.textSecondary} />
+              <Text style={[styles.primaryCtaText, { color: theme.textSecondary }]}>
+                {item.tradeType === 'free'
+                  ? 'Item Claimed on Campus'
+                  : item.tradeType === 'swap'
+                  ? 'Item Swapped on Campus'
+                  : 'Item Sold on Campus'}
               </Text>
             </View>
           </View>

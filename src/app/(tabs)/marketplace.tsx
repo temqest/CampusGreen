@@ -164,9 +164,9 @@ export default function MarketplaceScreen() {
     setSelectedCourse(null);
   };
 
-  // Filtered Items
+  // Filtered & Ranked Items (Priority: Urgent Selling -> Bumped Listings -> Normal)
   const filteredItems = useMemo(() => {
-    return items.filter((item) => {
+    const list = items.filter((item) => {
       // 1. Campus Filter (Normalize any legacy UNC items to AdNU)
       const itemCampus =
         item.campus?.includes('Nueva Caceres') || item.campus?.includes('UNC')
@@ -207,6 +207,33 @@ export default function MarketplaceScreen() {
       }
 
       return true;
+    });
+
+    // Ranking hierarchy:
+    // Tier 1: Urgent selling (isUrgent: true)
+    // Tier 2: Bumped listings (bumpCount > 0)
+    // Tier 3: Normal listings
+    return [...list].sort((a, b) => {
+      const aUrgent = Boolean(a.isUrgent);
+      const bUrgent = Boolean(b.isUrgent);
+      if (aUrgent !== bUrgent) {
+        return aUrgent ? -1 : 1;
+      }
+
+      const aBumps = Number(a.bumpCount ?? 0);
+      const bBumps = Number(b.bumpCount ?? 0);
+      const aIsBumped = aBumps > 0;
+      const bIsBumped = bBumps > 0;
+
+      if (aIsBumped !== bIsBumped) {
+        return aIsBumped ? -1 : 1;
+      }
+
+      if (aIsBumped && bIsBumped && aBumps !== bBumps) {
+        return bBumps - aBumps;
+      }
+
+      return 0;
     });
   }, [items, selectedCampus, selectedTradeType, selectedCategory, selectedCourse, searchQuery]);
 
