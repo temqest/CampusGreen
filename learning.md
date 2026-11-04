@@ -207,10 +207,14 @@ This document captures project-specific design standards, user preferences, and 
   - Showcase institutional `.edu.ph` email verification, university affiliation, degree program, and authentic reputation score (⭐ 4.9 • 24 campus reviews • 100% meetup completion) alongside personal Green Impact metrics (kg CO₂ saved, items reused, ₱ saved).
 
 - **Profile Mental Models & Mobile Navigation Standards**:
-  - **Never put Settings or Ledger into Content Tabs**: Tabs must strictly partition user inventory and transactions (`Active Listings`, `Sold`, `My Orders`). Settings, preferences, and security belong in native grouped list rows at the base of the view or via a top-right header gear icon.
+  - **Decoupled Dedicated Settings Screen & Top-Right Gear Icon**:
+    - The main Profile page focuses strictly on Student Identity, Green Impact metrics, Escrow Wallet Balance/Cash-Out, and Student Inventory tabs (`Active Listings`, `Sold`, `My Orders`).
+    - Account and Security preferences (Payout details, Safe meetup spot, Change password, Escrow & payout ledger, Notification switches, App appearance theme mode, and Log Out) are moved off the profile page into a dedicated Settings screen (`src/app/settings.tsx`).
+    - The Profile screen features an organic top header with the title *"Profile"* and a top-right settings gear icon button (`Ionicons name="settings-outline"`, min 44x44px tap target) that navigates cleanly to `/settings`.
+  - **Never put Settings or Ledger into Content Tabs**: Tabs must strictly partition user inventory and transactions (`Active Listings`, `Sold`, `My Orders`).
   - **Thumb-Friendly Cash-Out Action Dock**: The "Cash Out Funds" CTA must be a prominent, full-width button docked cleanly inside or below the Escrow Wallet card with generous vertical padding, never a cramped pill next to balance headers.
   - **Bottom Dock Safety Margin**: Always apply generous bottom padding (`paddingBottom: insets.bottom + 110`) so the bottom-most list items, logout buttons, and floating tab bar never overlap or cause clipped touch targets.
-  - **Modal Auxiliary Sheets for Complex Actions**: Keep the main profile page uncluttered by housing secondary flows (Escrow Ledger history, Cash-Out transfer forms, Meetup Spot selector) in bottom-sliding modal sheets.
+  - **Modal Auxiliary Sheets for Complex Actions**: Keep secondary flows (Escrow Ledger history, Cash-Out transfer forms, Meetup Spot selector) in bottom-sliding modal sheets.
 
 ---
 
@@ -510,5 +514,14 @@ This document captures project-specific design standards, user preferences, and 
     - Splash screen icon: `assets/images/splash-icon.png` with brand background `#1e8c5a`.
     - Web favicon: `assets/images/favicon.png` (48x48).
     - Removed outdated boilerplate `./assets/expo.icon` Apple Icon catalog to prevent iOS builds from falling back to default Expo template art.
+
+### 26. Campus Scope & Institutional Normalization (ADNU Exclusivity)
+- **Single Institutional Campus Scope**:
+  - The marketplace is exclusively dedicated to **Ateneo de Naga University (AdNU)**.
+  - Multi-campus pickers or options referencing Univ. of Nueva Caceres (UNC) are removed from both Discovery/Marketplace (`src/app/(tabs)/marketplace.tsx`) and Seller Listing (`src/app/(tabs)/sell.tsx`).
+  - In `src/app/(tabs)/sell.tsx`, Step 3 displays a clean, verified single-campus badge for `Ateneo de Naga University (AdNU)` rather than a multi-campus toggle button.
+  - All inventory and historical listings from UNC are permanently normalized to `Ateneo de Naga University` (with safe meetup spots mapped to AdNU safe zones like Main Library Ground Floor, Burns Hall, Gate 1 Security Post, and Student Center Pavilion).
+  - In `src/lib/database.ts` and `src/context/items-context.tsx`, runtime normalization rules automatically remap any incoming items containing `'Nueva Caceres'` or `'UNC'` to `'Ateneo de Naga University'`.
+
 
 

@@ -49,7 +49,6 @@ const CONDITIONS: { label: Condition; desc: string }[] = [
 
 const CAMPUS_OPTIONS = [
   'Ateneo de Naga University',
-  'Univ. of Nueva Caceres',
 ];
 
 const DEFAULT_MEETUP_SPOTS = [
@@ -120,7 +119,7 @@ export default function SellScreen() {
   const [description, setDescription] = useState('');
 
   // Step 3: Campus Handover & Context
-  const [campus, setCampus] = useState(CAMPUS_OPTIONS[0]);
+  const [campus] = useState(CAMPUS_OPTIONS[0]);
   const [safeMeetupSpot, setSafeMeetupSpot] = useState('');
   const [courseTag, setCourseTag] = useState('');
   const [yearLevel, setYearLevel] = useState<string | null>(null);
@@ -824,40 +823,30 @@ export default function SellScreen() {
             <View style={styles.stepContent}>
               {/* Campus Selector */}
               <View style={styles.cardSection}>
-                <Text style={[styles.fieldLabel, { color: theme.text }]}>Campus *</Text>
-                <View style={styles.campusToggleRow}>
-                  {CAMPUS_OPTIONS.map((c) => {
-                    const isSelected = campus === c;
-                    return (
-                      <Pressable
-                        key={c}
-                        style={[
-                          styles.campusTab,
-                          {
-                            backgroundColor: isSelected ? theme.primary : theme.surface,
-                            borderColor: isSelected ? theme.primary : theme.border,
-                          },
-                        ]}
-                        onPress={() => setCampus(c)}>
-                        <Ionicons
-                          name="school-outline"
-                          size={16}
-                          color={isSelected ? '#FFFFFF' : theme.textSecondary}
-                          style={{ marginRight: 6 }}
-                        />
-                        <Text
-                          style={[
-                            styles.campusTabText,
-                            {
-                              color: isSelected ? '#FFFFFF' : theme.text,
-                              fontWeight: isSelected ? '700' : '500',
-                            },
-                          ]}>
-                          {c === 'Ateneo de Naga University' ? 'Ateneo de Naga (AdNU)' : 'Univ. of Nueva Caceres (UNC)'}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                <Text style={[styles.fieldLabel, { color: theme.text }]}>Campus</Text>
+                <View
+                  style={[
+                    styles.singleCampusBadge,
+                    {
+                      backgroundColor: theme.primaryLight,
+                      borderColor: theme.primary,
+                    },
+                  ]}>
+                  <Ionicons
+                    name="school"
+                    size={16}
+                    color={theme.primary}
+                    style={{ marginRight: 8 }}
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.singleCampusTitle, { color: theme.primary }]}>
+                      Ateneo de Naga University (AdNU)
+                    </Text>
+                    <Text style={[styles.singleCampusSub, { color: theme.textSecondary }]}>
+                      Verified campus gear exchange zone
+                    </Text>
+                  </View>
+                  <Ionicons name="checkmark-circle" size={18} color={theme.primary} />
                 </View>
               </View>
 
@@ -1031,7 +1020,7 @@ export default function SellScreen() {
                       </View>
 
                       <Text style={[styles.summaryLocation, { color: theme.textSecondary }]} numberOfLines={1}>
-                        📍 {safeMeetupSpot || 'Select meetup spot'} • {campus.includes('Ateneo') ? 'AdNU' : 'UNC'}
+                        📍 {safeMeetupSpot || 'Select meetup spot'} • AdNU
                       </Text>
                     </View>
                   </View>
@@ -1462,6 +1451,22 @@ const styles = StyleSheet.create({
   },
   campusToggleRow: {
     gap: Spacing.two,
+  },
+  singleCampusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: Radius.lg,
+    borderWidth: 1.5,
+  },
+  singleCampusTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  singleCampusSub: {
+    fontSize: 11,
+    marginTop: 2,
   },
   campusTab: {
     flexDirection: 'row',

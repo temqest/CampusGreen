@@ -76,7 +76,12 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     try {
       const liveItems = await fetchItemsFromSupabase();
       if (liveItems && liveItems.length > 0) {
-        setItems(liveItems);
+        const normalized = liveItems.map((item) =>
+          item.campus?.includes('Nueva Caceres') || item.campus?.includes('UNC')
+            ? { ...item, campus: 'Ateneo de Naga University' }
+            : item
+        );
+        setItems(normalized);
       }
     } catch (err) {
       console.warn('Using seeded items while Supabase connects:', err);
@@ -90,7 +95,12 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
     fetchItemsFromSupabase()
       .then((liveItems) => {
         if (isMounted && liveItems && liveItems.length > 0) {
-          setItems(liveItems);
+          const normalized = liveItems.map((item) =>
+            item.campus?.includes('Nueva Caceres') || item.campus?.includes('UNC')
+              ? { ...item, campus: 'Ateneo de Naga University' }
+              : item
+          );
+          setItems(normalized);
         }
       })
       .catch((err) => {

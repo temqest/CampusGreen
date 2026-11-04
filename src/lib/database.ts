@@ -61,7 +61,10 @@ export function mapDbToItem(row: any): MarketplaceItem {
     condition: (row.condition || 'Good') as Condition,
     courseTag: row.course_tag || row.courseTag || undefined,
     yearLevel: row.year_level || row.yearLevel || undefined,
-    campus: row.campus || 'Ateneo de Naga University',
+    campus:
+      row.campus && (row.campus.includes('Nueva Caceres') || row.campus.includes('UNC'))
+        ? 'Ateneo de Naga University'
+        : (row.campus || 'Ateneo de Naga University'),
     safeMeetupSpot: row.safe_meetup_spot || row.safeMeetupSpot || 'Main Library Ground Floor',
     sellerId: row.seller_id || row.sellerId || undefined,
     sellerName: row.seller_name || row.sellerName || 'Campus Student',

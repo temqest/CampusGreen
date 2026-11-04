@@ -19,10 +19,9 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { useThemeContext } from '@/context/theme-context';
 import { useItems } from '@/context/items-context';
-import { EscrowTransaction, MarketplaceItem } from '@/types/item';
-import { supabase, uploadImageToSupabase } from '@/lib/supabase';
+import { MarketplaceItem } from '@/types/item';
+import { uploadImageToSupabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   fetchOrdersFromSupabase,
@@ -60,12 +59,10 @@ type CashOutChannel = 'gcash' | 'maya';
 
 export default function ProfileScreen() {
   const theme = useTheme();
-  const { themeMode, setThemeMode } = useThemeContext();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const {
     items,
-    refreshItems,
     bumpItem,
     toggleUrgent,
     setItemStatus,
@@ -106,30 +103,15 @@ export default function ProfileScreen() {
     channel: string;
   } | null>(null);
 
-  // Escrow Ledger Modal (Moved to Preferences)
-  const [isLedgerModalVisible, setIsLedgerModalVisible] = useState(false);
-
-  // Payment Details Modal State
-  const [isPaymentDetailsModalVisible, setIsPaymentDetailsModalVisible] = useState(false);
-  const [defaultPayoutChannel, setDefaultPayoutChannel] = useState<CashOutChannel>('gcash');
-  const [defaultPayoutNumber, setDefaultPayoutNumber] = useState('0917 824 5519');
-  const [tempPayoutChannel, setTempPayoutChannel] = useState<CashOutChannel>(defaultPayoutChannel);
-  const [tempPayoutNumber, setTempPayoutNumber] = useState(defaultPayoutNumber);
-
-  // Change Password Modal State
-  const [isChangePasswordModalVisible, setIsChangePasswordModalVisible] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  // Escrow Wallet Defaults
+  const [defaultPayoutChannel] = useState<CashOutChannel>('gcash');
+  const [defaultPayoutNumber] = useState('0917 824 5519');
 
   // Escrow Explainer Modal
   const [isEscrowGuideVisible, setIsEscrowGuideVisible] = useState(false);
 
-  // Edit Meetup Spot Modal
-  const [isEditSpotModalVisible, setIsEditSpotModalVisible] = useState(false);
+  // Preferred Meetup Spot
   const [preferredSpot, setPreferredSpot] = useState('Main Library Ground Floor');
-  const [tempSpot, setTempSpot] = useState(preferredSpot);
 
   // Student Profile Identity State - Clean Slate for new accounts
   const [profileId, setProfileId] = useState<string>('user_active_student');
@@ -181,7 +163,6 @@ export default function ProfileScreen() {
           }
           if (parsed.preferredMeetupSpot) {
             setPreferredSpot(parsed.preferredMeetupSpot);
-            setTempSpot(parsed.preferredMeetupSpot);
           }
         }
 
@@ -197,7 +178,6 @@ export default function ProfileScreen() {
           }
           if (p.preferredMeetupSpot) {
             setPreferredSpot(p.preferredMeetupSpot);
-            setTempSpot(p.preferredMeetupSpot);
           }
           setTempProfileName(p.fullName);
           setTempProfileDegree(p.degreeProgram);
@@ -223,10 +203,6 @@ export default function ProfileScreen() {
 
   // Profile Photo Picker Modal State (Same file picker found in sell)
   const [isPhotoPickerModalVisible, setIsPhotoPickerModalVisible] = useState(false);
-
-  // Settings toggles
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [isAppearanceModalVisible, setIsAppearanceModalVisible] = useState(false);
 
   // Action feedback toast
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
@@ -459,86 +435,6 @@ export default function ProfileScreen() {
     setCashOutSuccess(null);
   };
 
-  // Save new meetup spot
-  const handleSaveMeetupSpot = () => {
-    if (tempSpot.trim()) {
-      const newSpot = tempSpot.trim();
-      setPreferredSpot(newSpot);
-      setIsEditSpotModalVisible(false);
-      setActionFeedback('Preferred meetup spot updated & saved.');
-      setTimeout(() => setActionFeedback(null), 3000);
-
-      saveProfileToSupabase({
-        id: profileId,
-        fullName: profileName,
-        degreeProgram: profileDegree,
-        yearLevel: profileYearLevel,
-        campus: 'Ateneo de Naga University',
-        avatarUrl: profileAvatarUri || undefined,
-        preferredMeetupSpot: newSpot,
-      }).catch((err) => console.warn('Supabase save spot error:', err));
-    }
-  };
-
-  // Save Payment Details
-  const handleSavePaymentDetails = () => {
-    if (!tempPayoutNumber.trim() || tempPayoutNumber.trim().length < 10) {
-      Alert.alert('Invalid Mobile Number', 'Please enter a valid 11-digit mobile number.');
-      return;
-    }
-    setDefaultPayoutChannel(tempPayoutChannel);
-    setDefaultPayoutNumber(tempPayoutNumber.trim());
-    setIsPaymentDetailsModalVisible(false);
-    setActionFeedback('Payment and payout details updated.');
-    setTimeout(() => setActionFeedback(null), 3000);
-  };
-
-  // Change Password
-  const handleChangePassword = () => {
-    if (!currentPassword) {
-      Alert.alert('Required Field', 'Please enter your current password.');
-      return;
-    }
-    if (!newPassword || newPassword.length < 6) {
-      Alert.alert('Password Length', 'New password must be at least 6 characters.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      Alert.alert('Password Mismatch', 'New password and confirmation do not match.');
-      return;
-    }
-    setIsChangePasswordModalVisible(false);
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    setActionFeedback('Password updated successfully.');
-    setTimeout(() => setActionFeedback(null), 3000);
-  };
-
-  // Log Out confirmation
-  const handleSignOut = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out of your student account?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Log Out',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await AsyncStorage.removeItem('@campusgreen_user_profile');
-            await supabase.auth.signOut().catch(() => {});
-            setProfileId('');
-            setProfileName('');
-            setStudentPurchases([]);
-            await refreshItems().catch(() => {});
-          } catch (e) {
-            console.warn('Error clearing profile on logout:', e);
-          }
-          router.replace('/(auth)/login');
-        },
-      },
-    ]);
-  };
-
   // Photo Picker: Choose from Library
   const handlePickAvatarFromLibrary = async () => {
     setIsPhotoPickerModalVisible(false);
@@ -728,6 +624,29 @@ export default function ProfileScreen() {
             paddingBottom: insets.bottom + 100,
           },
         ]}>
+        {/* ================= 0. TOP HEADER: PROFILE & SETTINGS ICON ================= */}
+        <View style={styles.topHeaderRow}>
+          <View style={styles.topHeaderTitleGroup}>
+            <Text style={[styles.topHeaderTitle, { color: theme.text }]}>
+              Profile
+            </Text>
+            <Text style={[styles.topHeaderSubtitle, { color: theme.textSecondary }]}>
+              Student account & activity
+            </Text>
+          </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Settings and Preferences"
+            style={[
+              styles.settingsGearBtn,
+              { backgroundColor: theme.surface, borderColor: theme.border },
+            ]}
+            onPress={() => router.push('/settings')}>
+            <Ionicons name="settings-outline" size={21} color={theme.text} />
+          </Pressable>
+        </View>
+
         {/* ================= 1. REFINED STUDENT PROFILE HEADER ================= */}
         <View
           style={[
@@ -1474,289 +1393,6 @@ export default function ProfileScreen() {
             )}
           </View>
         )}
-
-        {/* ================= 7. COMPREHENSIVE ACCOUNT PREFERENCES & SETTINGS ================= */}
-        {/* Houses transaction ledger, payout details, change password, safety & policies cleanly */}
-        <View style={styles.accountSection}>
-          <Text style={[styles.accountSectionHeading, { color: theme.text }]}>
-            Account & Security Preferences
-          </Text>
-
-          <View
-            style={[
-              styles.groupedAccountCard,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}>
-            {/* Row 1: Escrow & Payout Ledger (Moved here per user request) */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="View Escrow and Payout Ledger"
-              style={styles.accountRow}
-              onPress={() => setIsLedgerModalVisible(true)}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                <Ionicons name="receipt-outline" size={17} color={theme.primary} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Escrow & Payout Ledger
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  History of locks, releases & disbursements
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 2: Payment & Payout Details */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Manage linked payout methods"
-              style={styles.accountRow}
-              onPress={() => {
-                setTempPayoutChannel(defaultPayoutChannel);
-                setTempPayoutNumber(defaultPayoutNumber);
-                setIsPaymentDetailsModalVisible(true);
-              }}>
-              <View
-                style={[
-                  styles.accountRowIconCircle,
-                  {
-                    backgroundColor: defaultPayoutChannel === 'gcash' ? '#EFF6FF' : '#0A1810',
-                    borderWidth: 1,
-                    borderColor: defaultPayoutChannel === 'gcash' ? '#DBEAFE' : '#183824',
-                  },
-                ]}>
-                <Image
-                  source={defaultPayoutChannel === 'gcash' ? GCASH_LOGO : MAYA_LOGO}
-                  style={defaultPayoutChannel === 'gcash' ? styles.rowGcashLogo : styles.rowMayaLogo}
-                  contentFit="contain"
-                />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Payout E-Wallet Details
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 1 }}>
-                  <Text style={[styles.accountRowValue, { color: theme.textSecondary }]} numberOfLines={1}>
-                    {defaultPayoutNumber}
-                  </Text>
-                  <View
-                    style={[
-                      styles.rowChannelBadge,
-                      {
-                        backgroundColor: defaultPayoutChannel === 'gcash' ? '#EFF6FF' : '#0A1810',
-                        borderColor: defaultPayoutChannel === 'gcash' ? '#DBEAFE' : '#183824',
-                      },
-                    ]}>
-                    <Image
-                      source={defaultPayoutChannel === 'gcash' ? GCASH_LOGO : MAYA_LOGO}
-                      style={defaultPayoutChannel === 'gcash' ? styles.badgeGcashLogo : styles.badgeMayaLogo}
-                      contentFit="contain"
-                    />
-                  </View>
-                  <Text style={[styles.accountRowValue, { color: theme.textMuted }]}>
-                    (Default)
-                  </Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 3: Default Safe Meetup Spot */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Edit preferred campus safe meetup spot"
-              style={styles.accountRow}
-              onPress={() => {
-                setTempSpot(preferredSpot);
-                setIsEditSpotModalVisible(true);
-              }}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                <Ionicons name="location-outline" size={17} color={theme.primary} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Safe Meetup Spot
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]} numberOfLines={1}>
-                  {preferredSpot}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 4: Change Password */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Change student account password"
-              style={styles.accountRow}
-              onPress={() => {
-                setCurrentPassword('');
-                setNewPassword('');
-                setConfirmPassword('');
-                setShowPassword(false);
-                setIsChangePasswordModalVisible(true);
-              }}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
-                <Ionicons name="key-outline" size={17} color={theme.text} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Change Password
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  Update your student account security credentials
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 4.5: Campus Boost Subscription & Growth Tool Plan */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Manage Campus Boost Seller Subscription"
-              style={styles.accountRow}
-              onPress={() => {
-                setSelectedSubTier(null);
-                setSubPaymentMethod(null);
-                setIsSubscriptionModalVisible(true);
-              }}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                <Ionicons name="rocket-outline" size={17} color={theme.primary} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Campus Boost Subscription
-                </Text>
-                <Text style={[styles.accountRowValue, { color: subscription.isActive ? theme.primary : theme.textSecondary }]}>
-                  {subscription.isActive
-                    ? `${subscription.tierName} • Active`
-                    : 'Unlock listing bumps & urgent badges'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 5: Campus Institutional Verification */}
-            <View style={styles.accountRow}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.badgeGreenBg }]}>
-                <Ionicons name="school-outline" size={17} color={theme.primary} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Student Verification
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.primary }]}>
-                  Verified • Ateneo de Naga (.edu.ph)
-                </Text>
-              </View>
-              <Ionicons name="checkmark-circle" size={17} color={theme.primary} />
-            </View>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 6: Escrow Buyer & Seller Protection Guide */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="View Escrow Protection Guide"
-              style={styles.accountRow}
-              onPress={() => setIsEscrowGuideVisible(true)}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
-                <Ionicons name="shield-checkmark-outline" size={17} color={theme.text} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Escrow Protection & 72h Guarantee
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  How your payments and sales are safeguarded
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 7: Notifications Toggle */}
-            <View style={styles.accountRow}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
-                <Ionicons name="notifications-outline" size={17} color={theme.text} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  Handover & Payout Alerts
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  Push notices on payouts and meetup arrivals
-                </Text>
-              </View>
-              <Switch
-                value={notificationsEnabled}
-                onValueChange={setNotificationsEnabled}
-                trackColor={{ false: theme.border, true: theme.primary }}
-                thumbColor="#FFFFFF"
-              />
-            </View>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 8: App Appearance (Light, Dark, System) */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Change app appearance theme"
-              style={styles.accountRow}
-              onPress={() => setIsAppearanceModalVisible(true)}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: theme.surfaceSubtle }]}>
-                <Ionicons
-                  name={themeMode === 'dark' ? 'moon-outline' : themeMode === 'light' ? 'sunny-outline' : 'contrast-outline'}
-                  size={17}
-                  color={theme.text}
-                />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.text }]}>
-                  App Appearance
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  {themeMode === 'system' ? 'System Default' : themeMode === 'light' ? 'Light Theme' : 'Dark Theme'}
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-
-            <View style={[styles.rowDivider, { backgroundColor: theme.borderSubtle }]} />
-
-            {/* Row 9: Log Out */}
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Log out of student account"
-              style={styles.accountRow}
-              onPress={handleSignOut}>
-              <View style={[styles.accountRowIconCircle, { backgroundColor: '#FEE2E2' }]}>
-                <Ionicons name="log-out-outline" size={17} color={theme.error} />
-              </View>
-              <View style={styles.accountRowContent}>
-                <Text style={[styles.accountRowTitle, { color: theme.error, fontWeight: '700' }]}>
-                  Log Out
-                </Text>
-                <Text style={[styles.accountRowValue, { color: theme.textSecondary }]}>
-                  Sign out of this campus device
-                </Text>
-              </View>
-              <Ionicons name="chevron-forward" size={17} color={theme.textMuted} />
-            </Pressable>
-          </View>
-        </View>
       </ScrollView>
 
       {/* ================= 8. LISTING MANAGEMENT BOTTOM SHEET MODAL ================= */}
@@ -2586,119 +2222,6 @@ export default function ProfileScreen() {
         </View>
       </Modal>
 
-      {/* ================= 10. ESCROW LEDGER MODAL SHEET ================= */}
-      <Modal
-        visible={isLedgerModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsLedgerModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsLedgerModalVisible(false)} />
-
-          <View
-            style={[
-              styles.modalSheet,
-              { backgroundColor: theme.surface, maxHeight: '80%', paddingBottom: insets.bottom + 20 },
-            ]}>
-            <View style={styles.modalDragNotch} />
-
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Escrow Ledger</Text>
-                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
-                  Locks, releases, and disbursements record
-                </Text>
-              </View>
-              <Pressable onPress={() => setIsLedgerModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={22} color={theme.textMuted} />
-              </Pressable>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} style={{ marginTop: Spacing.three }}>
-              {wallet.transactions.map((tx: EscrowTransaction) => {
-                const isCashOut = tx.type === 'cash_out';
-                const isPending = tx.status === 'pending';
-                const isRelease = tx.type === 'escrow_release';
-
-                return (
-                  <View
-                    key={tx.id}
-                    style={[
-                      styles.ledgerTxCard,
-                      { backgroundColor: theme.surfaceSubtle, borderColor: theme.borderSubtle },
-                    ]}>
-                    <View
-                      style={[
-                        styles.ledgerIconCircle,
-                        {
-                          backgroundColor: isCashOut
-                            ? '#FEE2E2'
-                            : isPending
-                            ? theme.goldBg
-                            : theme.badgeGreenBg,
-                        },
-                      ]}>
-                      <Ionicons
-                        name={
-                          isCashOut
-                            ? 'arrow-up'
-                            : isPending
-                            ? 'lock-closed'
-                            : 'checkmark-circle'
-                        }
-                        size={16}
-                        color={
-                          isCashOut ? theme.error : isPending ? theme.gold : theme.primary
-                        }
-                      />
-                    </View>
-
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={[styles.ledgerTxTitle, { color: theme.text }]} numberOfLines={1}>
-                          {tx.title}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.ledgerTxAmount,
-                            {
-                              color: isCashOut
-                                ? theme.error
-                                : isRelease
-                                ? theme.primary
-                                : theme.text,
-                            },
-                          ]}>
-                          {isCashOut ? '-' : '+'}₱
-                          {tx.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={[styles.ledgerTxSub, { color: theme.textMuted }]}>
-                          {tx.referenceCode} • {tx.date}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.ledgerTxStatus,
-                            { color: isPending ? theme.gold : theme.primary },
-                          ]}>
-                          {isPending ? 'In Escrow' : 'Completed'}
-                        </Text>
-                      </View>
-                      {tx.notes && (
-                        <Text style={[styles.ledgerTxNotes, { color: theme.textSecondary }]}>
-                          {tx.notes}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
       {/* ================= 11. ESCROW EXPLAINER MODAL ================= */}
       <Modal
         visible={isEscrowGuideVisible}
@@ -2730,395 +2253,6 @@ export default function ProfileScreen() {
               onPress={() => setIsEscrowGuideVisible(false)}>
               <Text style={styles.dialogBtnText}>Got it</Text>
             </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ================= 12. EDIT MEETUP SPOT MODAL ================= */}
-      <Modal
-        visible={isEditSpotModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsEditSpotModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsEditSpotModalVisible(false)} />
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalDragNotch} />
-            <Text style={[styles.modalTitle, { color: theme.text }]}>Preferred Meetup Spot</Text>
-            <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
-              Designate a safe campus zone for physical item handovers
-            </Text>
-
-            <View
-              style={[
-                styles.modalInputContainer,
-                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border, marginTop: Spacing.four },
-              ]}>
-              <Ionicons name="location-outline" size={18} color={theme.primary} style={{ marginRight: 8 }} />
-              <TextInput
-                style={[styles.modalTextInput, { color: theme.text }]}
-                value={tempSpot}
-                onChangeText={setTempSpot}
-                placeholder="e.g. Alingal Hall Tourism Lobby, Library Ground Floor"
-                placeholderTextColor={theme.textMuted}
-              />
-            </View>
-
-            <View style={styles.quickSpotChipsRow}>
-              {['Alingal Hall Tourism Lobby', 'Main Library Ground Floor', 'Gate 1 Security Post'].map((spot) => (
-                <Pressable
-                  key={spot}
-                  style={[
-                    styles.quickSpotChip,
-                    { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
-                  ]}
-                  onPress={() => setTempSpot(spot)}>
-                  <Text style={[styles.quickSpotChipText, { color: theme.text }]}>{spot}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Save meetup spot"
-              style={[styles.modalPrimaryActionBtn, { backgroundColor: theme.primary, marginTop: Spacing.four }]}
-              onPress={handleSaveMeetupSpot}>
-              <Text style={styles.modalPrimaryActionText}>Save Preferred Spot</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ================= 13. PAYMENT & PAYOUT DETAILS MODAL ================= */}
-      <Modal
-        visible={isPaymentDetailsModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsPaymentDetailsModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsPaymentDetailsModalVisible(false)} />
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalDragNotch} />
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Payout E-Wallet Details</Text>
-                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
-                  Default disbursement account for cleared escrow funds
-                </Text>
-              </View>
-              <Pressable onPress={() => setIsPaymentDetailsModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={22} color={theme.textMuted} />
-              </Pressable>
-            </View>
-
-            {/* Channel Selection */}
-            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.four }]}>
-              Default Payout Channel *
-            </Text>
-            <View style={styles.channelRow}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Select GCash as default payout channel"
-                style={[
-                  styles.channelCard,
-                  {
-                    backgroundColor:
-                      tempPayoutChannel === 'gcash' ? theme.primaryLight : theme.surface,
-                    borderColor: tempPayoutChannel === 'gcash' ? theme.primary : theme.border,
-                  },
-                ]}
-                onPress={() => setTempPayoutChannel('gcash')}>
-                <View style={styles.channelLogoBoxGcash}>
-                  <Image
-                    source={GCASH_LOGO}
-                    style={styles.channelLogoImgGcash}
-                    contentFit="contain"
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.channelName,
-                    {
-                      color: tempPayoutChannel === 'gcash' ? theme.primary : theme.text,
-                      fontWeight: tempPayoutChannel === 'gcash' ? '700' : '600',
-                    },
-                  ]}>
-                  GCash
-                </Text>
-                {tempPayoutChannel === 'gcash' && (
-                  <Ionicons name="checkmark-circle" size={15} color={theme.primary} />
-                )}
-              </Pressable>
-
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Select Maya as default payout channel"
-                style={[
-                  styles.channelCard,
-                  {
-                    backgroundColor:
-                      tempPayoutChannel === 'maya' ? theme.primaryLight : theme.surface,
-                    borderColor: tempPayoutChannel === 'maya' ? theme.primary : theme.border,
-                  },
-                ]}
-                onPress={() => setTempPayoutChannel('maya')}>
-                <View style={styles.channelLogoBoxMaya}>
-                  <Image
-                    source={MAYA_LOGO}
-                    style={styles.channelLogoImgMaya}
-                    contentFit="contain"
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.channelName,
-                    {
-                      color: tempPayoutChannel === 'maya' ? theme.primary : theme.text,
-                      fontWeight: tempPayoutChannel === 'maya' ? '700' : '600',
-                    },
-                  ]}>
-                  Maya
-                </Text>
-                {tempPayoutChannel === 'maya' && (
-                  <Ionicons name="checkmark-circle" size={15} color={theme.primary} />
-                )}
-              </Pressable>
-            </View>
-
-            {/* Mobile number */}
-            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
-              Registered E-Wallet Mobile Number *
-            </Text>
-            <View
-              style={[
-                styles.modalInputContainer,
-                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
-              ]}>
-              <Text style={[styles.countryCode, { color: theme.textMuted }]}>+63</Text>
-              <TextInput
-                style={[styles.modalTextInput, { color: theme.text }]}
-                placeholder="917 824 5519"
-                placeholderTextColor={theme.textMuted}
-                keyboardType="phone-pad"
-                value={tempPayoutNumber}
-                onChangeText={setTempPayoutNumber}
-              />
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Save payout details"
-              style={[styles.modalPrimaryActionBtn, { backgroundColor: theme.primary, marginTop: Spacing.four }]}
-              onPress={handleSavePaymentDetails}>
-              <Text style={styles.modalPrimaryActionText}>Save Payout Details</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ================= 14. CHANGE PASSWORD MODAL ================= */}
-      <Modal
-        visible={isChangePasswordModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsChangePasswordModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsChangePasswordModalVisible(false)} />
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalDragNotch} />
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>Change Password</Text>
-                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
-                  Keep your student institutional account safe
-                </Text>
-              </View>
-              <Pressable onPress={() => setIsChangePasswordModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={22} color={theme.textMuted} />
-              </Pressable>
-            </View>
-
-            {/* Current Password */}
-            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.four }]}>
-              Current Password *
-            </Text>
-            <View
-              style={[
-                styles.modalInputContainer,
-                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
-              ]}>
-              <TextInput
-                style={[styles.modalTextInput, { color: theme.text }]}
-                placeholder="Enter current password"
-                placeholderTextColor={theme.textMuted}
-                secureTextEntry={!showPassword}
-                value={currentPassword}
-                onChangeText={setCurrentPassword}
-              />
-              <Pressable onPress={() => setShowPassword(!showPassword)} style={{ padding: 4 }}>
-                <Ionicons
-                  name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                  size={18}
-                  color={theme.textMuted}
-                />
-              </Pressable>
-            </View>
-
-            {/* New Password */}
-            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
-              New Password (minimum 6 characters) *
-            </Text>
-            <View
-              style={[
-                styles.modalInputContainer,
-                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
-              ]}>
-              <TextInput
-                style={[styles.modalTextInput, { color: theme.text }]}
-                placeholder="Enter new password"
-                placeholderTextColor={theme.textMuted}
-                secureTextEntry={!showPassword}
-                value={newPassword}
-                onChangeText={setNewPassword}
-              />
-            </View>
-
-            {/* Confirm Password */}
-            <Text style={[styles.modalInputLabel, { color: theme.text, marginTop: Spacing.three }]}>
-              Confirm New Password *
-            </Text>
-            <View
-              style={[
-                styles.modalInputContainer,
-                { backgroundColor: theme.surfaceSubtle, borderColor: theme.border },
-              ]}>
-              <TextInput
-                style={[styles.modalTextInput, { color: theme.text }]}
-                placeholder="Re-type new password"
-                placeholderTextColor={theme.textMuted}
-                secureTextEntry={!showPassword}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-              />
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Update password"
-              style={[styles.modalPrimaryActionBtn, { backgroundColor: theme.primary, marginTop: Spacing.four }]}
-              onPress={handleChangePassword}>
-              <Text style={styles.modalPrimaryActionText}>Update Password</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ================= 15. APP APPEARANCE MODAL ================= */}
-      <Modal
-        visible={isAppearanceModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setIsAppearanceModalVisible(false)}>
-        <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={() => setIsAppearanceModalVisible(false)} />
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface, paddingBottom: insets.bottom + 20 }]}>
-            <View style={styles.modalDragNotch} />
-            <View style={styles.modalHeaderRow}>
-              <View>
-                <Text style={[styles.modalTitle, { color: theme.text }]}>App Appearance</Text>
-                <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
-                  Choose how CampusGreen looks on this device
-                </Text>
-              </View>
-              <Pressable onPress={() => setIsAppearanceModalVisible(false)} style={styles.modalCloseBtn}>
-                <Ionicons name="close" size={22} color={theme.textMuted} />
-              </Pressable>
-            </View>
-
-            {/* Appearance Options List */}
-            <View style={{ gap: Spacing.two, marginTop: Spacing.four }}>
-              {[
-                {
-                  id: 'system' as const,
-                  title: 'System Default',
-                  desc: 'Automatically matches your device display settings',
-                  icon: 'phone-portrait-outline' as const,
-                },
-                {
-                  id: 'light' as const,
-                  title: 'Light Theme',
-                  desc: 'Classic ivory background with forest academic green',
-                  icon: 'sunny-outline' as const,
-                },
-                {
-                  id: 'dark' as const,
-                  title: 'Dark Theme',
-                  desc: 'Soft dark charcoal tones for low-light campus reading',
-                  icon: 'moon-outline' as const,
-                },
-              ].map((opt) => {
-                const isSelected = themeMode === opt.id;
-                return (
-                  <Pressable
-                    key={opt.id}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: isSelected }}
-                    accessibilityLabel={`${opt.title} option`}
-                    style={[
-                      styles.appearanceOptionCard,
-                      {
-                        backgroundColor: isSelected ? theme.primaryLight : theme.surfaceSubtle,
-                        borderColor: isSelected ? theme.primary : theme.border,
-                      },
-                    ]}
-                    onPress={() => {
-                      setThemeMode(opt.id);
-                      setActionFeedback(`App appearance set to ${opt.title}`);
-                      setTimeout(() => setActionFeedback(null), 3000);
-                      setIsAppearanceModalVisible(false);
-                    }}>
-                    <View
-                      style={[
-                        styles.accountRowIconCircle,
-                        {
-                          backgroundColor: isSelected ? theme.badgeGreenBg : theme.surface,
-                        },
-                      ]}>
-                      <Ionicons
-                        name={opt.icon}
-                        size={18}
-                        color={isSelected ? theme.primary : theme.text}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[
-                          styles.appearanceOptionTitle,
-                          {
-                            color: isSelected ? theme.primaryDark : theme.text,
-                            fontWeight: isSelected ? '700' : '600',
-                          },
-                        ]}>
-                        {opt.title}
-                      </Text>
-                      <Text style={[styles.appearanceOptionDesc, { color: theme.textSecondary }]}>
-                        {opt.desc}
-                      </Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.radioIndicator,
-                        {
-                          borderColor: isSelected ? theme.primary : theme.border,
-                          backgroundColor: isSelected ? theme.primary : 'transparent',
-                        },
-                      ]}>
-                      {isSelected && <Ionicons name="checkmark" size={13} color="#FFFFFF" />}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
           </View>
         </View>
       </Modal>
@@ -3438,6 +2572,35 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.four,
     gap: Spacing.three,
+  },
+
+  /* 0. Top Header Row & Settings Icon */
+  topHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  topHeaderTitleGroup: {
+    flex: 1,
+  },
+  topHeaderTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+  },
+  topHeaderSubtitle: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  settingsGearBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* 1. Student Identity Header Card */

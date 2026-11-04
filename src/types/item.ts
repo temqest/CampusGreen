@@ -37,7 +37,7 @@ export interface MarketplaceItem {
   condition: Condition;
   courseTag?: string; // e.g., 'BS Nursing', 'BS Accountancy'
   yearLevel?: string; // e.g., '2nd Year', 'Graduating'
-  campus: string; // e.g., 'Ateneo de Naga University', 'Univ. of Nueva Caceres'
+  campus: string; // e.g., 'Ateneo de Naga University'
   safeMeetupSpot: string; // e.g., 'Main Library Ground Floor', 'Gate 1 Security Post'
   sellerId?: string;
   sellerName: string;

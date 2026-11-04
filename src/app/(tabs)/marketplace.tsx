@@ -44,8 +44,6 @@ const TRADE_OPTIONS: { label: string; value: TradeType | null }[] = [
 
 const CAMPUS_OPTIONS = [
   'Ateneo de Naga University',
-  'Univ. of Nueva Caceres',
-  'All Campuses',
 ];
 
 const POPULAR_COURSES = [
@@ -169,8 +167,13 @@ export default function MarketplaceScreen() {
   // Filtered Items
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
-      // 1. Campus Filter
-      if (selectedCampus !== 'All Campuses' && item.campus !== selectedCampus) {
+      // 1. Campus Filter (Normalize any legacy UNC items to AdNU)
+      const itemCampus =
+        item.campus?.includes('Nueva Caceres') || item.campus?.includes('UNC')
+          ? 'Ateneo de Naga University'
+          : item.campus;
+
+      if (selectedCampus && itemCampus !== selectedCampus) {
         return false;
       }
 
