@@ -46,7 +46,12 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "db:clean": "node ./scripts/clean-supabase.js",
+    "db:clean:keep-profiles": "node ./scripts/clean-supabase.js --keep-profiles",
+    "db:clean:keep-items": "node ./scripts/clean-supabase.js --keep-items",
+    "db:clean:seed": "node ./scripts/clean-supabase.js --seed",
+    "db:seed": "node ./scripts/seed-database.js"
   },
   "private": true
 }

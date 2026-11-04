@@ -339,9 +339,11 @@ export async function fetchChatConversationsFromSupabase(
       id: row.id,
       itemId: row.item_id,
       userId: row.user_id,
-      buyerName: resolvedBuyerName,
-      buyerAvatarUri: resolvedBuyerAvatar,
-      buyerYear: resolvedBuyerYear,
+      buyerId: row.buyer_id || row.user_id,
+      buyerName: row.buyer_name || resolvedBuyerName,
+      buyerAvatarUri: row.buyer_avatar_uri || resolvedBuyerAvatar,
+      buyerYear: row.buyer_year || resolvedBuyerYear,
+      sellerId: row.seller_id,
       sellerName: row.seller_name,
       sellerYear: row.seller_year,
       itemTitle: row.item_title,
@@ -352,16 +354,33 @@ export async function fetchChatConversationsFromSupabase(
       unreadCount: row.unread_count || 0,
       safeMeetupSpot: row.safe_meetup_spot,
       sellerAvatarUri: row.seller_avatar_uri,
+      agreementStatus: (row.agreement_status || 'pending') as 'pending' | 'accepted' | 'completed' | 'cancelled',
+      orderId: row.order_id || undefined,
+      escrowStatus: (row.escrow_status || 'none') as 'none' | 'in_escrow' | 'cod_pending' | 'released',
+      referenceCode: row.reference_code || undefined,
+      buyerConfirmedAt: row.buyer_confirmed_at || undefined,
+      sellerConfirmedAt: row.seller_confirmed_at || undefined,
+      buyerRating: row.buyer_rating !== null && row.buyer_rating !== undefined ? Number(row.buyer_rating) : undefined,
+      buyerRatingTags: row.buyer_rating_tags || undefined,
+      buyerRatingComment: row.buyer_rating_comment || undefined,
+      sellerRating: row.seller_rating !== null && row.seller_rating !== undefined ? Number(row.seller_rating) : undefined,
+      sellerRatingTags: row.seller_rating_tags || undefined,
+      sellerRatingComment: row.seller_rating_comment || undefined,
     };
   });
 }
 
 export async function saveChatConversationToSupabase(conv: any, userId: string = 'user_active_student') {
   const currentFormattedTime = formatConversationTime(new Date());
-  const payload = {
+  const payload: Record<string, any> = {
     id: conv.id,
     item_id: conv.itemId,
-    user_id: userId,
+    user_id: conv.buyerId || conv.userId || userId,
+    buyer_id: conv.buyerId || conv.userId || userId,
+    buyer_name: conv.buyerName || 'Campus Student',
+    buyer_avatar_uri: conv.buyerAvatarUri || null,
+    buyer_year: conv.buyerYear || 'Verified Student',
+    seller_id: conv.sellerId || null,
     seller_name: conv.sellerName,
     seller_year: conv.sellerYear || 'Verified Student',
     item_title: conv.itemTitle || 'Marketplace Item',
@@ -372,11 +391,47 @@ export async function saveChatConversationToSupabase(conv: any, userId: string =
     unread_count: conv.unreadCount || 0,
     safe_meetup_spot: conv.safeMeetupSpot || 'Main Library Ground Floor',
     seller_avatar_uri: conv.sellerAvatarUri || null,
+    agreement_status: conv.agreementStatus || 'pending',
+    order_id: conv.orderId || null,
+    escrow_status: conv.escrowStatus || 'none',
+    reference_code: conv.referenceCode || null,
+    buyer_confirmed_at: conv.buyerConfirmedAt || null,
+    seller_confirmed_at: conv.sellerConfirmedAt || null,
+    buyer_rating: conv.buyerRating ?? null,
+    buyer_rating_tags: conv.buyerRatingTags || null,
+    buyer_rating_comment: conv.buyerRatingComment || null,
+    seller_rating: conv.sellerRating ?? null,
+    seller_rating_tags: conv.sellerRatingTags || null,
+    seller_rating_comment: conv.sellerRatingComment || null,
     updated_at: new Date().toISOString(),
   };
 
   const { error } = await supabase.from('chat_conversations').upsert(payload, { onConflict: 'id' });
   if (error) console.warn('Error saving conversation to Supabase:', error.message);
+}
+
+export async function releaseEscrowToSeller(orderId: string, sellerId: string, amount: number, itemTitle: string) {
+  try {
+    // 1. Mark order as completed
+    await supabase.from('orders').update({ escrow_status: 'completed' }).eq('id', orderId);
+
+    // 2. Add escrow_release transaction to seller's wallet
+    const releaseTx = {
+      id: `tx_rel_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      user_id: sellerId,
+      type: 'escrow_release',
+      title: `Escrow Released: ${itemTitle.substring(0, 32)}`,
+      amount,
+      date: 'Just now',
+      status: 'completed',
+      reference_code: `REL-${Math.floor(100000 + Math.random() * 900000)}`,
+      channel: 'escrow',
+      notes: `Campus meetup retrieval confirmed. Funds released to wallet.`,
+    };
+    await supabase.from('transactions').insert(releaseTx);
+  } catch (err) {
+    console.warn('Error releasing escrow to seller:', err);
+  }
 }
 
 export async function fetchChatMessagesFromSupabase(itemId: string) {

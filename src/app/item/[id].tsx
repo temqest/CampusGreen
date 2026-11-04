@@ -653,7 +653,10 @@ export default function ItemDetailScreen() {
                   pathname: '/chat/[id]',
                   params: {
                     id: item.id,
+                    sellerName: item.sellerName,
+                    sellerAvatarUri: item.sellerAvatarUri || undefined,
                     buyerName: currentUserFullName || undefined,
+                    isSeller: 'false',
                   },
                 });
               }}>
@@ -720,7 +723,10 @@ export default function ItemDetailScreen() {
                 pathname: '/chat/[id]',
                 params: {
                   id: item.id,
+                  sellerName: item.sellerName,
+                  sellerAvatarUri: item.sellerAvatarUri || undefined,
                   buyerName: currentUserFullName || undefined,
+                  isSeller: 'false',
                 },
               });
             }}>
@@ -825,8 +831,11 @@ export default function ItemDetailScreen() {
                   pathname: '/chat/[id]',
                   params: {
                     id: item.id,
+                    sellerName: item.sellerName,
+                    sellerAvatarUri: item.sellerAvatarUri || undefined,
                     offeredItem: offered,
                     buyerName: currentUserFullName || undefined,
+                    isSeller: 'false',
                   },
                 });
               }}>

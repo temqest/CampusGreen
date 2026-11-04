@@ -523,5 +523,64 @@ This document captures project-specific design standards, user preferences, and 
   - All inventory and historical listings from UNC are permanently normalized to `Ateneo de Naga University` (with safe meetup spots mapped to AdNU safe zones like Main Library Ground Floor, Burns Hall, Gate 1 Security Post, and Student Center Pavilion).
   - In `src/lib/database.ts` and `src/context/items-context.tsx`, runtime normalization rules automatically remap any incoming items containing `'Nueva Caceres'` or `'UNC'` to `'Ateneo de Naga University'`.
 
+### 27. Sell Flow Photo Upload Realism
+- **Elimination of Debug / Quick Sample Photo Chips**:
+  - In `src/components/sell/photo-picker-section.tsx`, removed mock sample photo presets (`SAMPLE_PRESETS` and "Quick Samples (For Testing)" chip buttons).
+  - Sellers must only upload genuine photos directly via Camera or Photo Gallery (`handleTakePhoto` / `handlePickFromLibrary`) to uphold listing integrity and authenticity.
+
+### 28. Perspective-Aware Peer Chat Resolution (Buyer vs. Seller)
+- **Automatic Perspective Detection**:
+  - The conversation view and conversation inbox dynamically resolve who the viewer is (Buyer vs. Seller) using multi-tier signal matching:
+    1. Navigation parameter `isSeller: 'true' | 'false'`.
+    2. Active student profile ID (`currentUser.id`) vs. item `sellerId` / conversation `userId`.
+    3. Active student profile name (`currentUser.fullName`) vs. `sellerName` / `buyerName`.
+- **Perspective-Based Display**:
+  - **When the viewer is the Buyer**:
+    - Inbox and chat thread display the **Seller's** name, avatar, and verification badge.
+    - Subtitle states their year and `Verified Seller`.
+    - Input placeholder prompts: `Message ${sellerName}...`.
+    - Role pill badge displays `Seller`.
+  - **When the viewer is the Seller**:
+    - Inbox and chat thread display the **Buyer's** name, avatar, and verification badge.
+    - Subtitle states their year and `Inquiring Buyer`.
+    - Input placeholder prompts: `Message ${buyerName}...`.
+    - Role pill badge displays `Buyer`.
+- **Search & Filter Ergonomics**:
+  - Search filter in `(tabs)/chat.tsx` searches across `buyerName`, `sellerName`, `itemTitle`, and `lastMessage` so sellers can find their buyers by name and vice-versa.
+  - Safe navigation parameter passing (`id`, `sellerName`, `buyerName`, `sellerAvatarUri`, `buyerAvatarUri`, `isSeller`) prevents flicker when transitioning between screens.
+
+### 29. Action & Rating Role Asymmetry (Acceptance, Handover, and Peer Reviews)
+- **Zero Self-Rating Invariant**:
+  - A user must never rate themselves. The rating target is always the counterpart (`counterpartDisplayName` and `counterpartRoleLabel`).
+  - **Buyer Rating**: When the buyer rates, the modal displays *"Rate Your Seller"* and records a review for the seller.
+  - **Seller Rating**: When the seller rates, the modal displays *"Rate Your Buyer"* and records a review for the buyer.
+- **Asymmetric Agreement Lifecycle**:
+  - **Pending State**:
+    - Seller sees: `"Accept Swap Trade"` / `"Confirm Freebie"`.
+    - Buyer sees: Informational status `"Swap Proposed"` / `"Freebie Requested"` awaiting seller response.
+    - Only the buyer can edit the proposed exchange item.
+  - **Accepted State (Meetup Coordination)**:
+    - Seller sees: `"Confirm Item Handover"` with instructions to hand the item over to the buyer at the safe campus meetup spot.
+    - Buyer sees: `"Confirm Item Retrieval"` with instructions to inspect and retrieve the item from the seller.
+  - **Completed State**:
+    - Generates perspective-specific completion notices (`"Item handed over to..."` vs. `"Item retrieved from..."`).
+    - Opens the peer rating pop-up addressing the counterpart by name.
 
 
+
+
+
+
+### 30. Persistent End-to-End Chat Transaction Lifecycle & Escrow Settlement
+- **Persistent Agreement & Rating Schema (`chat_conversations`)**:
+  - In `supabase/schema.sql`, added persistent lifecycle columns: `buyer_id`, `buyer_name`, `buyer_avatar_uri`, `buyer_year`, `seller_id`, `agreement_status` (`'pending' | 'accepted' | 'completed' | 'cancelled'`), `order_id`, `escrow_status`, `reference_code`, `buyer_confirmed_at`, `seller_confirmed_at`, `buyer_rating`, `buyer_rating_tags`, `buyer_rating_comment`, `seller_rating`, `seller_rating_tags`, and `seller_rating_comment`.
+  - Mapped bidirectionally in `src/lib/database.ts` and `src/context/chat-context.tsx`.
+- **Payment & Agreement Synchronization**:
+  - Completing escrow or COD payment on `src/app/payment/[id].tsx` immediately transitions the conversation agreement status to `'accepted'` with the verified order ID, escrow status, and generated reference code.
+  - When returning to or opening the chat thread, the agreement card reflects the paid/secured state without reverting to `'pending'`.
+- **Automated Escrow Release upon Verified Retrieval**:
+  - Added `releaseEscrowToSeller(orderId, sellerId, amount, itemTitle)` in `src/lib/database.ts`.
+  - When the transaction is confirmed completed in `src/app/chat/[id].tsx`, if an active escrow order exists (`escrowStatus === 'in_escrow'`), funds are automatically credited to the seller's wallet balance, an escrow settlement ledger entry is recorded in `wallet_transactions`, and the order status is updated to `'completed'`.
+- **Zero Duplicate Actions & Permanent Rating State**:
+  - Once an agreement is marked completed, it remains permanently completed across app restarts, re-renders, and navigations.
+  - Ratings are stored separately for buyer and seller (`buyerRating` vs `sellerRating`). Once recorded, the UI replaces the rating prompt with the persistent score badge (`★ X/5`), preventing repeated or self-ratings.

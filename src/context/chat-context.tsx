@@ -28,9 +28,11 @@ export interface ChatConversation {
   id: string;
   itemId: string;
   userId?: string;
+  buyerId?: string;
   buyerName?: string;
   buyerAvatarUri?: string;
   buyerYear?: string;
+  sellerId?: string;
   sellerName: string;
   sellerYear: string;
   itemTitle: string;
@@ -41,6 +43,19 @@ export interface ChatConversation {
   unreadCount: number;
   safeMeetupSpot: string;
   sellerAvatarUri?: string;
+  // Lifecycle & Transaction
+  agreementStatus: 'pending' | 'accepted' | 'completed' | 'cancelled';
+  orderId?: string;
+  escrowStatus?: 'none' | 'in_escrow' | 'cod_pending' | 'released';
+  referenceCode?: string;
+  buyerConfirmedAt?: string;
+  sellerConfirmedAt?: string;
+  buyerRating?: number;
+  buyerRatingTags?: string[];
+  buyerRatingComment?: string;
+  sellerRating?: number;
+  sellerRatingTags?: string[];
+  sellerRatingComment?: string;
 }
 
 interface ChatContextType {
@@ -52,7 +67,19 @@ interface ChatContextType {
     itemMeta?: Partial<MarketplaceItem>
   ) => void;
   addSystemMessage: (itemId: string, text: string) => void;
-  ensureConversation: (item: MarketplaceItem) => ChatConversation;
+  ensureConversation: (item: MarketplaceItem, extra?: Partial<ChatConversation>) => ChatConversation;
+  updateAgreementStatus: (
+    itemId: string,
+    status: 'pending' | 'accepted' | 'completed' | 'cancelled',
+    extra?: Partial<ChatConversation>
+  ) => Promise<void>;
+  submitPeerRating: (
+    itemId: string,
+    isBuyer: boolean,
+    rating: number,
+    tags?: string[],
+    comment?: string
+  ) => Promise<void>;
   isTypingByItemId: Record<string, boolean>;
   markAsRead: (itemId: string) => void;
   refreshConversations: () => Promise<void>;
@@ -193,55 +220,140 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }).catch((err) => console.warn('Supabase save system message error:', err));
   }, []);
 
-  const ensureConversation = useCallback((item: MarketplaceItem): ChatConversation => {
-    const conversationId = `conv-${item.id}`;
-    const initialGreeting =
-      item.tradeType === 'swap'
-        ? `Hi! Thanks for your interest in swapping for my ${item.title}. What gear or item are you proposing to trade?`
-        : item.tradeType === 'free'
-        ? `Hi! Glad someone can make use of the ${item.title}! It's completely free for campus pickup at ${item.safeMeetupSpot}.`
-        : `Hi! Thanks for checking out the ${item.title}. It's still available for meetup at ${item.safeMeetupSpot}. Feel free to ask any questions!`;
+  const ensureConversation = useCallback(
+    (item: MarketplaceItem, extra?: Partial<ChatConversation>): ChatConversation => {
+      const conversationId = `conv-${item.id}`;
+      const initialGreeting =
+        item.tradeType === 'swap'
+          ? `Hi! Thanks for your interest in swapping for my ${item.title}. What gear or item are you proposing to trade?`
+          : item.tradeType === 'free'
+          ? `Hi! Glad someone can make use of the ${item.title}! It's completely free for campus pickup at ${item.safeMeetupSpot}.`
+          : `Hi! Thanks for checking out the ${item.title}. It's still available for meetup at ${item.safeMeetupSpot}. Feel free to ask any questions!`;
 
-    const newConv: ChatConversation = {
-      id: conversationId,
-      itemId: item.id,
-      userId: currentUser?.id || 'user_active_student',
-      buyerName: currentUser?.fullName || 'Campus Student',
-      sellerName: item.sellerName || 'Campus Student',
-      sellerYear: item.sellerYear || 'Verified Student',
-      itemTitle: item.title,
-      price: item.price ?? null,
-      tradeType: item.tradeType || 'buy',
-      lastMessage: initialGreeting,
-      timestamp: formatConversationTime(new Date()),
-      unreadCount: 0,
-      safeMeetupSpot: item.safeMeetupSpot || 'Main Library Ground Floor',
-      sellerAvatarUri: item.sellerAvatarUri,
-    };
+      const newConv: ChatConversation = {
+        id: conversationId,
+        itemId: item.id,
+        userId: currentUser?.id || 'user_active_student',
+        buyerId: currentUser?.id || 'user_active_student',
+        buyerName: currentUser?.fullName || 'Campus Student',
+        sellerId: item.sellerId,
+        sellerName: item.sellerName || 'Campus Student',
+        sellerYear: item.sellerYear || 'Verified Student',
+        itemTitle: item.title,
+        price: item.price ?? null,
+        tradeType: item.tradeType || 'buy',
+        lastMessage: initialGreeting,
+        timestamp: formatConversationTime(new Date()),
+        unreadCount: 0,
+        safeMeetupSpot: item.safeMeetupSpot || 'Main Library Ground Floor',
+        sellerAvatarUri: item.sellerAvatarUri,
+        agreementStatus: item.status === 'reserved' || item.isReserved ? 'accepted' : 'pending',
+        escrowStatus: 'none',
+        ...extra,
+      };
 
-    setConversations((prev) => {
-      const existing = prev.find((c) => c.itemId === item.id);
-      if (existing) return prev;
-      return [newConv, ...prev];
-    });
-
-    AsyncStorage.getItem('@campusgreen_user_profile')
-      .then((stored) => {
-        let activeUserId = 'user_active_student';
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (parsed.id) activeUserId = parsed.id;
-          } catch {}
+      setConversations((prev) => {
+        const existing = prev.find((c) => c.itemId === item.id);
+        if (existing) {
+          if (extra && Object.keys(extra).length > 0) {
+            const merged = { ...existing, ...extra };
+            saveChatConversationToSupabase(merged, merged.userId || 'user_active_student').catch(() => {});
+            return [merged, ...prev.filter((c) => c.itemId !== item.id)];
+          }
+          return prev;
         }
-        return saveChatConversationToSupabase(newConv, activeUserId);
-      })
-      .catch((err) =>
-        console.warn('Supabase save auto-generated conversation error:', err)
-      );
+        return [newConv, ...prev];
+      });
 
-    return newConv;
-  }, [currentUser]);
+      AsyncStorage.getItem('@campusgreen_user_profile')
+        .then((stored) => {
+          let activeUserId = 'user_active_student';
+          if (stored) {
+            try {
+              const parsed = JSON.parse(stored);
+              if (parsed.id) activeUserId = parsed.id;
+            } catch {}
+          }
+          return saveChatConversationToSupabase(newConv, activeUserId);
+        })
+        .catch((err) =>
+          console.warn('Supabase save auto-generated conversation error:', err)
+        );
+
+      return newConv;
+    },
+    [currentUser]
+  );
+
+  const updateAgreementStatus = useCallback(
+    async (
+      itemId: string,
+      status: 'pending' | 'accepted' | 'completed' | 'cancelled',
+      extra?: Partial<ChatConversation>
+    ) => {
+      let updatedToSave: ChatConversation | null = null;
+      setConversations((prev) => {
+        const existing = prev.find((c) => c.itemId === itemId);
+        if (!existing) return prev;
+        const updated: ChatConversation = {
+          ...existing,
+          agreementStatus: status,
+          ...extra,
+        };
+        updatedToSave = updated;
+        return [updated, ...prev.filter((c) => c.itemId !== itemId)];
+      });
+
+      if (updatedToSave) {
+        await saveChatConversationToSupabase(
+          updatedToSave,
+          (updatedToSave as ChatConversation).userId || 'user_active_student'
+        );
+      }
+    },
+    []
+  );
+
+  const submitPeerRating = useCallback(
+    async (
+      itemId: string,
+      isBuyer: boolean,
+      rating: number,
+      tags?: string[],
+      comment?: string
+    ) => {
+      let updatedToSave: ChatConversation | null = null;
+      setConversations((prev) => {
+        const existing = prev.find((c) => c.itemId === itemId);
+        if (!existing) return prev;
+        const ratingUpdates: Partial<ChatConversation> = isBuyer
+          ? {
+              buyerRating: rating,
+              buyerRatingTags: tags,
+              buyerRatingComment: comment,
+            }
+          : {
+              sellerRating: rating,
+              sellerRatingTags: tags,
+              sellerRatingComment: comment,
+            };
+        const updated: ChatConversation = {
+          ...existing,
+          ...ratingUpdates,
+        };
+        updatedToSave = updated;
+        return [updated, ...prev.filter((c) => c.itemId !== itemId)];
+      });
+
+      if (updatedToSave) {
+        await saveChatConversationToSupabase(
+          updatedToSave,
+          (updatedToSave as ChatConversation).userId || 'user_active_student'
+        );
+      }
+    },
+    []
+  );
 
   const sendMessage = useCallback(
     (
@@ -308,34 +420,46 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       // 3. Update / bump conversation in the inbox list
       const conversationId = `conv-${itemId}`;
-      const updatedConv: ChatConversation = {
-        id: conversationId,
-        itemId,
-        userId: isSeller ? (itemMeta as any)?.buyerId : currentUser?.id || 'user_active_student',
-        buyerName: isSeller ? (itemMeta as any)?.buyerName : currentUser?.fullName,
-        buyerAvatarUri: (itemMeta as any)?.buyerAvatarUri,
-        buyerYear: (itemMeta as any)?.buyerYear,
-        sellerName: itemMeta?.sellerName || 'Campus Student',
-        sellerYear: itemMeta?.sellerYear || 'Verified Student',
-        itemTitle: itemMeta?.title || 'Marketplace Item',
-        price: itemMeta?.price ?? null,
-        tradeType: itemMeta?.tradeType || 'buy',
-        lastMessage: previewText,
-        timestamp: convTimestamp,
-        unreadCount: 0,
-        safeMeetupSpot: itemMeta?.safeMeetupSpot || 'Main Library Ground Floor',
-        sellerAvatarUri: itemMeta?.sellerAvatarUri,
-      };
+      let finalConvToPersist: ChatConversation | null = null;
 
       setConversations((prev) => {
         const existingConv = prev.find((c) => c.itemId === itemId);
         const mergedConv: ChatConversation = {
-          ...updatedConv,
-          userId: updatedConv.userId || existingConv?.userId,
-          buyerName: updatedConv.buyerName || existingConv?.buyerName,
-          buyerAvatarUri: updatedConv.buyerAvatarUri || existingConv?.buyerAvatarUri,
-          buyerYear: updatedConv.buyerYear || existingConv?.buyerYear,
+          id: conversationId,
+          itemId,
+          userId: isSeller
+            ? ((itemMeta as any)?.buyerId || existingConv?.userId)
+            : (currentUser?.id || existingConv?.userId || 'user_active_student'),
+          buyerName: isSeller
+            ? ((itemMeta as any)?.buyerName || existingConv?.buyerName)
+            : (currentUser?.fullName || existingConv?.buyerName),
+          buyerAvatarUri: (itemMeta as any)?.buyerAvatarUri || existingConv?.buyerAvatarUri,
+          buyerYear: (itemMeta as any)?.buyerYear || existingConv?.buyerYear,
+          sellerId: itemMeta?.sellerId || existingConv?.sellerId,
+          sellerName: itemMeta?.sellerName || existingConv?.sellerName || 'Campus Student',
+          sellerYear: itemMeta?.sellerYear || existingConv?.sellerYear || 'Verified Student',
+          itemTitle: itemMeta?.title || existingConv?.itemTitle || 'Marketplace Item',
+          price: itemMeta?.price ?? existingConv?.price ?? null,
+          tradeType: itemMeta?.tradeType || existingConv?.tradeType || 'buy',
+          lastMessage: previewText,
+          timestamp: convTimestamp,
+          unreadCount: 0,
+          safeMeetupSpot: itemMeta?.safeMeetupSpot || existingConv?.safeMeetupSpot || 'Main Library Ground Floor',
+          sellerAvatarUri: itemMeta?.sellerAvatarUri || existingConv?.sellerAvatarUri,
+          agreementStatus: existingConv?.agreementStatus || 'pending',
+          orderId: existingConv?.orderId,
+          escrowStatus: existingConv?.escrowStatus || 'none',
+          referenceCode: existingConv?.referenceCode,
+          buyerConfirmedAt: existingConv?.buyerConfirmedAt,
+          sellerConfirmedAt: existingConv?.sellerConfirmedAt,
+          buyerRating: existingConv?.buyerRating,
+          buyerRatingTags: existingConv?.buyerRatingTags,
+          buyerRatingComment: existingConv?.buyerRatingComment,
+          sellerRating: existingConv?.sellerRating,
+          sellerRatingTags: existingConv?.sellerRatingTags,
+          sellerRatingComment: existingConv?.sellerRatingComment,
         };
+        finalConvToPersist = mergedConv;
         const rest = prev.filter((c) => c.itemId !== itemId);
         return [mergedConv, ...rest];
       });
@@ -350,7 +474,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               if (parsed.id) activeUserId = parsed.id;
             } catch {}
           }
-          return saveChatConversationToSupabase(updatedConv, activeUserId);
+          if (finalConvToPersist) {
+            return saveChatConversationToSupabase(finalConvToPersist, activeUserId);
+          }
         })
         .catch((err) =>
           console.warn('Supabase save conversation error:', err)
@@ -467,20 +593,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             }).catch((err) => console.warn('Supabase save peer message error:', err));
 
             // Update conversation with peer's reply
-            const replyConv: ChatConversation = {
-              ...updatedConv,
-              lastMessage: reply,
-              timestamp: peerConvTimestamp,
-            };
-
             setConversations((prev) => {
+              const base = prev.find((c) => c.itemId === itemId);
+              if (!base) return prev;
+              const replyConv: ChatConversation = {
+                ...base,
+                lastMessage: reply,
+                timestamp: peerConvTimestamp,
+              };
+              saveChatConversationToSupabase(replyConv).catch((err) =>
+                console.warn('Supabase save reply conversation error:', err)
+              );
               const rest = prev.filter((c) => c.itemId !== itemId);
               return [replyConv, ...rest];
             });
-
-            saveChatConversationToSupabase(replyConv).catch((err) =>
-              console.warn('Supabase save reply conversation error:', err)
-            );
           }, 900);
         })
         .catch(() => {});
@@ -496,6 +622,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         sendMessage,
         addSystemMessage,
         ensureConversation,
+        updateAgreementStatus,
+        submitPeerRating,
         isTypingByItemId,
         markAsRead,
         refreshConversations,

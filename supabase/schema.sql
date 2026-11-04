@@ -107,6 +107,11 @@ create table if not exists public.chat_conversations (
   id text primary key,
   item_id text not null references public.items(id) on delete cascade,
   user_id text not null default 'user_active_student',
+  buyer_id text default 'user_active_student',
+  buyer_name text default 'Campus Student',
+  buyer_avatar_uri text,
+  buyer_year text default 'Verified Student',
+  seller_id text,
   seller_name text not null default 'Campus Student',
   seller_year text default 'Verified Student',
   item_title text not null default 'Marketplace Item',
@@ -117,8 +122,40 @@ create table if not exists public.chat_conversations (
   unread_count integer default 0,
   safe_meetup_spot text default 'Main Library Ground Floor',
   seller_avatar_uri text,
+  agreement_status text not null default 'pending', -- 'pending' | 'accepted' | 'completed' | 'cancelled'
+  order_id text,
+  escrow_status text default 'none', -- 'none' | 'in_escrow' | 'cod_pending' | 'released'
+  reference_code text,
+  buyer_confirmed_at timestamptz,
+  seller_confirmed_at timestamptz,
+  buyer_rating integer,
+  buyer_rating_tags text[],
+  buyer_rating_comment text,
+  seller_rating integer,
+  seller_rating_tags text[],
+  seller_rating_comment text,
   updated_at timestamptz default now()
 );
+
+-- Ensure newly added columns exist if the table was created previously
+alter table public.chat_conversations
+  add column if not exists buyer_id text default 'user_active_student',
+  add column if not exists buyer_name text default 'Campus Student',
+  add column if not exists buyer_avatar_uri text,
+  add column if not exists buyer_year text default 'Verified Student',
+  add column if not exists seller_id text,
+  add column if not exists agreement_status text not null default 'pending',
+  add column if not exists order_id text,
+  add column if not exists escrow_status text default 'none',
+  add column if not exists reference_code text,
+  add column if not exists buyer_confirmed_at timestamptz,
+  add column if not exists seller_confirmed_at timestamptz,
+  add column if not exists buyer_rating integer,
+  add column if not exists buyer_rating_tags text[],
+  add column if not exists buyer_rating_comment text,
+  add column if not exists seller_rating integer,
+  add column if not exists seller_rating_tags text[],
+  add column if not exists seller_rating_comment text;
 
 alter table public.chat_conversations enable row level security;
 drop policy if exists "Allow all operations for demo chat_conversations" on public.chat_conversations;

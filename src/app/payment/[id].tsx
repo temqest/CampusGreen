@@ -97,6 +97,7 @@ export default function PaymentScreen() {
     setTimeout(() => {
       const prefix = selectedMethod === 'cod' ? 'CG-COD-' : 'CG-ESC-';
       const code = prefix + Math.floor(100000 + Math.random() * 900000);
+      const newOrderId = `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
       setReferenceCode(code);
       setPaymentState('success');
 
@@ -104,13 +105,21 @@ export default function PaymentScreen() {
       if (item) {
         setItemStatus(item.id, 'reserved');
 
-        // Ensure chat conversation exists and add payment confirmation notice
-        ensureConversation(item);
+        const escrowStatus = selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow';
+
+        // Ensure chat conversation exists and transition to accepted/escrow state
+        ensureConversation(item, {
+          agreementStatus: 'accepted',
+          orderId: newOrderId,
+          escrowStatus,
+          referenceCode: code,
+        });
+
         addSystemMessage(
           item.id,
-          `💳 Purchase Initiated! Escrow payment for "${item.title}" (₱${formatAmount(totalAmount)} incl. 5% platform fee) confirmed via ${
+          `💳 Escrow Payment Confirmed! Payment for "${item.title}" (₱${formatAmount(totalAmount)} incl. 5% platform fee) secured in campus escrow via ${
             selectedMethod === 'cod' ? 'Cash on Delivery' : selectedMethod.toUpperCase()
-          }. Reference #${code}. Meetup zone: ${item.safeMeetupSpot}.`
+          }. Reference #${code}. Meetup zone: ${item.safeMeetupSpot}. Campus Pass #BUY-5120 issued.`
         );
 
         AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
@@ -123,14 +132,14 @@ export default function PaymentScreen() {
           }
 
           saveOrderToSupabase({
-            id: `ord_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            id: newOrderId,
             itemId: item.id,
             userId: activeUserId,
             title: item.title,
             price: totalAmount,
             sellerName: item.sellerName,
             safeMeetupSpot: item.safeMeetupSpot,
-            escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
+            escrowStatus,
             referenceCode: code,
             channel: selectedMethod,
           }).catch((err) => console.warn('Supabase saveOrder error:', err));
@@ -376,7 +385,16 @@ export default function PaymentScreen() {
             onPress={() =>
               router.replace({
                 pathname: '/chat/[id]',
-                params: { id: item.id },
+                params: {
+                  id: item.id,
+                  sellerName: item.sellerName,
+                  sellerAvatarUri: item.sellerAvatarUri || undefined,
+                  itemTitle: item.title,
+                  isSeller: 'false',
+                  agreementStatus: 'accepted',
+                  escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
+                  referenceCode: referenceCode || undefined,
+                },
               })
             }>
             <Ionicons name="chatbubbles" size={18} color="#FFFFFF" />

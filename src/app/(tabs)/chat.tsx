@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,12 +23,12 @@ export default function ChatInboxScreen() {
   const theme = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { conversations, markAsRead } = useChat();
+  const { conversations, markAsRead, refreshConversations } = useChat();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<ChatFilter>('all');
   const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string } | null>(null);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
     AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
       if (str) {
         try {
@@ -42,13 +42,28 @@ export default function ChatInboxScreen() {
     });
   }, []);
 
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+      refreshConversations().catch(() => {});
+    }, [loadProfile, refreshConversations])
+  );
+
   const filteredConversations = conversations.filter((c) => {
     const matchesFilter =
       activeFilter === 'all' ? true : c.tradeType === activeFilter;
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return matchesFilter;
+
     const matchesSearch =
-      c.sellerName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.itemTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.lastMessage.toLowerCase().includes(searchQuery.toLowerCase());
+      (c.sellerName && c.sellerName.toLowerCase().includes(q)) ||
+      (c.buyerName && c.buyerName.toLowerCase().includes(q)) ||
+      (c.itemTitle && c.itemTitle.toLowerCase().includes(q)) ||
+      (c.lastMessage && c.lastMessage.toLowerCase().includes(q));
     return matchesFilter && matchesSearch;
   });
 
@@ -191,31 +206,44 @@ export default function ChatInboxScreen() {
           </View>
         }
         renderItem={({ item }) => {
-          const isUserTheSeller = Boolean(
-            currentUser &&
-            currentUser.fullName &&
-            item.sellerName &&
-            item.sellerName.trim().toLowerCase() === currentUser.fullName.toLowerCase()
-          );
+          const currentId = currentUser?.id || '';
+          const currentName = currentUser?.fullName?.trim().toLowerCase() || '';
 
-          const counterpartName = isUserTheSeller
-            ? (item.buyerName || 'Campus Student')
-            : item.sellerName;
+          const sellerName = item.sellerName?.trim() || 'Campus Student';
+          const buyerName = item.buyerName?.trim() || 'Campus Student';
 
+          const isSellerByName = Boolean(currentName && sellerName.toLowerCase() === currentName);
+          const isSellerById = Boolean(currentId && item.sellerId && item.sellerId === currentId);
+          const isBuyerByName = Boolean(currentName && buyerName.toLowerCase() === currentName);
+          const isBuyerById = Boolean(currentId && item.userId && item.userId === currentId);
+
+          let isUserTheSeller = false;
+          if (isSellerByName || isSellerById) {
+            isUserTheSeller = true;
+          } else if (isBuyerByName || isBuyerById) {
+            isUserTheSeller = false;
+          } else {
+            isUserTheSeller = false;
+          }
+
+          const counterpartName = isUserTheSeller ? buyerName : sellerName;
+          const counterpartRole = isUserTheSeller ? 'Buyer' : 'Seller';
+          const avatarUri = isUserTheSeller ? item.buyerAvatarUri : item.sellerAvatarUri;
           const initials = counterpartName
             .split(' ')
+            .filter(Boolean)
             .map((n) => n[0])
             .join('')
-            .toUpperCase() || 'C';
+            .slice(0, 2)
+            .toUpperCase() || (isUserTheSeller ? 'B' : 'S');
 
-          const avatarUri = isUserTheSeller ? item.buyerAvatarUri : item.sellerAvatarUri;
           const isSwap = item.tradeType === 'swap';
           const isFree = item.tradeType === 'free';
 
           return (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Open chat with ${counterpartName}`}
+              accessibilityLabel={`Open chat with ${counterpartName} (${counterpartRole})`}
               style={({ pressed }) => [
                 styles.conversationCard,
                 {
@@ -231,7 +259,13 @@ export default function ChatInboxScreen() {
                   params: {
                     id: item.itemId,
                     sellerName: item.sellerName,
-                    buyerName: isUserTheSeller ? counterpartName : undefined,
+                    buyerName: item.buyerName || (isUserTheSeller ? counterpartName : currentUser?.fullName),
+                    sellerAvatarUri: item.sellerAvatarUri || undefined,
+                    buyerAvatarUri: item.buyerAvatarUri || undefined,
+                    isSeller: isUserTheSeller ? 'true' : 'false',
+                    agreementStatus: item.agreementStatus || 'pending',
+                    escrowStatus: item.escrowStatus || 'none',
+                    referenceCode: item.referenceCode || undefined,
                     itemTitle: item.itemTitle,
                     price: item.price !== null ? item.price.toString() : '0',
                   },
@@ -271,22 +305,25 @@ export default function ChatInboxScreen() {
                       size={14}
                       color={theme.primary}
                     />
-                    {isUserTheSeller && (
-                      <View
+                    <View
+                      style={{
+                        backgroundColor: isUserTheSeller ? theme.surfaceSubtle : theme.primaryLight,
+                        paddingHorizontal: 6,
+                        paddingVertical: 1,
+                        borderRadius: Radius.full,
+                        borderWidth: 1,
+                        borderColor: isUserTheSeller ? theme.border : theme.primary,
+                        marginLeft: 4,
+                      }}>
+                      <Text
                         style={{
-                          backgroundColor: theme.surfaceSubtle,
-                          paddingHorizontal: 6,
-                          paddingVertical: 1,
-                          borderRadius: Radius.full,
-                          borderWidth: 1,
-                          borderColor: theme.border,
-                          marginLeft: 4,
+                          fontSize: 10,
+                          color: isUserTheSeller ? theme.textSecondary : theme.primary,
+                          fontWeight: '700',
                         }}>
-                        <Text style={{ fontSize: 10, color: theme.primary, fontWeight: '700' }}>
-                          Buyer
-                        </Text>
-                      </View>
-                    )}
+                        {counterpartRole}
+                      </Text>
+                    </View>
                   </View>
                   <Text
                     style={[styles.timestamp, { color: theme.textSecondary }]}>

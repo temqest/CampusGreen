@@ -24,8 +24,9 @@ import { useItems } from '@/context/items-context';
 import { Message, useChat } from '@/context/chat-context';
 import { MarketplaceItem } from '@/types/item';
 import { uploadImageToSupabase } from '@/lib/supabase';
+import { releaseEscrowToSeller } from '@/lib/database';
 
-type AgreementStatus = 'pending' | 'accepted' | 'completed';
+type AgreementStatus = 'pending' | 'accepted' | 'completed' | 'cancelled';
 
 const RATING_DESCRIPTIONS: Record<number, string> = {
   1: '1/5 · Needs Improvement',
@@ -48,14 +49,28 @@ export default function ChatScreen() {
     id,
     sellerName: paramSellerName,
     buyerName: paramBuyerName,
+    buyerAvatarUri: paramBuyerAvatarUri,
+    sellerAvatarUri: paramSellerAvatarUri,
     itemTitle: paramItemTitle,
     offeredItem: paramOfferedItem,
+    isSeller: paramIsSeller,
+    agreementStatus: paramAgreementStatus,
+    escrowStatus: paramEscrowStatus,
+    referenceCode: paramReferenceCode,
+    orderId: paramOrderId,
   } = useLocalSearchParams<{
     id: string;
     sellerName?: string;
     buyerName?: string;
+    buyerAvatarUri?: string;
+    sellerAvatarUri?: string;
     itemTitle?: string;
     offeredItem?: string;
+    isSeller?: string;
+    agreementStatus?: string;
+    escrowStatus?: string;
+    referenceCode?: string;
+    orderId?: string;
   }>();
   const theme = useTheme();
   const router = useRouter();
@@ -68,6 +83,8 @@ export default function ChatScreen() {
     getMessages,
     sendMessage,
     addSystemMessage,
+    updateAgreementStatus,
+    submitPeerRating,
     isTypingByItemId,
   } = useChat();
   const { items, getItemById } = useItems();
@@ -86,7 +103,6 @@ export default function ChatScreen() {
       } as unknown as MarketplaceItem),
     [foundItem, id, paramSellerName, paramItemTitle]
   );
-  const sellerDisplayName = paramSellerName || item.sellerName;
   const itemDisplayName = paramItemTitle || item.title;
 
   const isSwap = item.tradeType === 'swap';
@@ -96,7 +112,7 @@ export default function ChatScreen() {
   // Active user profile state to determine viewer role (Buyer vs Seller)
   const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string } | null>(null);
 
-  useEffect(() => {
+  const loadProfile = useCallback(() => {
     AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
       if (str) {
         try {
@@ -110,38 +126,114 @@ export default function ChatScreen() {
     });
   }, []);
 
-  const isViewerSeller = useMemo(() => {
-    if (!currentUser) return false;
-    const matchesId = Boolean(currentUser.id && item?.sellerId && item.sellerId === currentUser.id);
-    const matchesName = Boolean(
-      currentUser.fullName &&
-      item?.sellerName &&
-      item.sellerName.trim().toLowerCase() === currentUser.fullName.toLowerCase()
-    );
-    return matchesId || matchesName;
-  }, [currentUser, item]);
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadProfile();
+    }, [loadProfile])
+  );
 
   const matchedConv = useMemo(
     () => conversations.find((c) => c.itemId === id),
     [conversations, id]
   );
 
-  const counterpartDisplayName = isViewerSeller
-    ? (paramBuyerName || matchedConv?.buyerName || 'Campus Student')
-    : sellerDisplayName;
-  const counterpartSubtitle = isViewerSeller
-    ? `${matchedConv?.buyerYear || 'Verified Student'} · Inquiring Buyer`
-    : `${item.sellerYear || 'Verified Student'} · Verified Peer`;
-  const counterpartAvatarUri = isViewerSeller
-    ? matchedConv?.buyerAvatarUri
-    : item.sellerAvatarUri;
+  const {
+    isViewerSeller,
+    counterpartDisplayName,
+    counterpartRoleLabel,
+    counterpartSubtitle,
+    counterpartAvatarUri,
+    counterpartInitials,
+  } = useMemo(() => {
+    const currentId = currentUser?.id || '';
+    const currentName = currentUser?.fullName?.trim().toLowerCase() || '';
+
+    const resolvedSellerName = paramSellerName || item?.sellerName || matchedConv?.sellerName || 'Campus Student';
+    const resolvedBuyerName = paramBuyerName || matchedConv?.buyerName || (currentId && currentName ? currentUser?.fullName : 'Campus Student');
+
+    let isSeller = false;
+    if (paramIsSeller === 'true') {
+      isSeller = true;
+    } else if (paramIsSeller === 'false') {
+      isSeller = false;
+    } else {
+      const isSellerByName = Boolean(currentName && resolvedSellerName.trim().toLowerCase() === currentName);
+      const isSellerById = Boolean(currentId && item?.sellerId && item.sellerId === currentId);
+      const isBuyerByName = Boolean(currentName && resolvedBuyerName && resolvedBuyerName.trim().toLowerCase() === currentName);
+      const isBuyerById = Boolean(currentId && matchedConv?.userId && matchedConv.userId === currentId);
+
+      if (isSellerByName || isSellerById) {
+        isSeller = true;
+      } else if (isBuyerByName || isBuyerById) {
+        isSeller = false;
+      } else {
+        isSeller = false;
+      }
+    }
+
+    const displayName = isSeller ? (resolvedBuyerName || 'Campus Student') : resolvedSellerName;
+    const roleLabel: 'Buyer' | 'Seller' = isSeller ? 'Buyer' : 'Seller';
+    const avatarUri = isSeller
+      ? (paramBuyerAvatarUri || matchedConv?.buyerAvatarUri)
+      : (paramSellerAvatarUri || item?.sellerAvatarUri || matchedConv?.sellerAvatarUri);
+    const subtitle = isSeller
+      ? `${matchedConv?.buyerYear || 'Verified Student'} · Inquiring Buyer`
+      : `${item?.sellerYear || matchedConv?.sellerYear || 'Verified Student'} · Verified Seller`;
+
+    const initials = displayName
+      .split(' ')
+      .filter(Boolean)
+      .map((n) => n[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || (isSeller ? 'B' : 'S');
+
+    return {
+      isViewerSeller: isSeller,
+      counterpartDisplayName: displayName,
+      counterpartRoleLabel: roleLabel,
+      counterpartSubtitle: subtitle,
+      counterpartAvatarUri: avatarUri,
+      counterpartInitials: initials,
+    };
+  }, [
+    paramIsSeller,
+    currentUser,
+    paramSellerName,
+    paramBuyerName,
+    paramBuyerAvatarUri,
+    paramSellerAvatarUri,
+    item,
+    matchedConv,
+  ]);
 
   const messages = getMessages(id, item);
   const isTyping = isTypingByItemId[id] || false;
 
-  // Interactive Agreement State
-  const [agreementStatus, setAgreementStatus] =
-    useState<AgreementStatus>('pending');
+  // Interactive Agreement State (Permanently synchronized from persistent conversation)
+  const agreementStatus: AgreementStatus = useMemo(() => {
+    if (matchedConv?.agreementStatus) {
+      if (matchedConv.agreementStatus === 'completed') return 'completed';
+      if (matchedConv.agreementStatus === 'accepted') return 'accepted';
+      if (matchedConv.agreementStatus === 'cancelled') return 'cancelled';
+      return 'pending';
+    }
+    if (paramAgreementStatus === 'completed' || paramAgreementStatus === 'accepted') {
+      return paramAgreementStatus as AgreementStatus;
+    }
+    if (item?.status === 'sold') return 'completed';
+    if (item?.status === 'reserved' || item?.isReserved) return 'accepted';
+    return 'pending';
+  }, [matchedConv?.agreementStatus, paramAgreementStatus, item?.status, item?.isReserved]);
+
+  const activeReferenceCode = matchedConv?.referenceCode || paramReferenceCode;
+  const activeEscrowStatus = matchedConv?.escrowStatus || paramEscrowStatus;
+  const activeOrderId = matchedConv?.orderId || paramOrderId;
+
   const [exchangeItemName, setExchangeItemName] = useState<string>(
     paramOfferedItem || 'Desk Study Lamp'
   );
@@ -155,13 +247,23 @@ export default function ChatScreen() {
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
 
-  // Buyer Rating System State (1 to 5 Stars)
+  // Peer Rating System State (Permanently synchronized from persistent conversation)
   const [ratingModalVisible, setRatingModalVisible] = useState(false);
   const [selectedStars, setSelectedStars] = useState(0); // Zero Pre-Selection Invariant
-  const [sellerRatingScore, setSellerRatingScore] = useState<number | null>(null);
-  const [hasRatedSeller, setHasRatedSeller] = useState(false);
   const [selectedRatingTags, setSelectedRatingTags] = useState<string[]>([]);
   const [ratingComment, setRatingComment] = useState('');
+
+  const peerRatingScore = useMemo(() => {
+    if (isViewerSeller) {
+      return matchedConv?.sellerRating ?? null;
+    } else {
+      return matchedConv?.buyerRating ?? null;
+    }
+  }, [isViewerSeller, matchedConv?.sellerRating, matchedConv?.buyerRating]);
+
+  const hasRatedPeer = useMemo(() => {
+    return Boolean(peerRatingScore && peerRatingScore > 0);
+  }, [peerRatingScore]);
 
   const scrollToBottom = useCallback((animated = true) => {
     flatListRef.current?.scrollToEnd({ animated });
@@ -291,48 +393,75 @@ export default function ChatScreen() {
   };
 
   // Interactive handler for Handover & Meetup confirmation
-  const handleAcceptAgreement = () => {
+  const handleAcceptAgreement = async () => {
     if (agreementStatus !== 'pending') return;
 
-    setAgreementStatus('accepted');
+    const passCode =
+      activeReferenceCode ||
+      (isSwap
+        ? `SWAP-${Math.floor(1000 + Math.random() * 9000)}`
+        : isFree
+        ? `FREE-${Math.floor(1000 + Math.random() * 9000)}`
+        : `BUY-${Math.floor(1000 + Math.random() * 9000)}`);
 
     const confirmationText = isSwap
-      ? `🤝 Swap Trade Agreement Confirmed! Both students agreed to trade "${itemDisplayName}" for "${exchangeItemName}". Campus Handover Pass #SWAP-8492 generated.`
+      ? `🤝 Swap Trade Agreement Confirmed! Both students agreed to trade "${itemDisplayName}" for "${exchangeItemName}". Campus Handover Pass #${passCode} generated.`
       : isFree
-      ? `🎁 Freebie Handover Confirmed! "${itemDisplayName}" is reserved for pickup at ${item.safeMeetupSpot}. Campus Pickup Pass #FREE-3201 generated.`
-      : `🤝 Meetup Arranged! "${itemDisplayName}" reserved for pickup at ${item.safeMeetupSpot}. Campus Handover Pass #BUY-5120 generated.`;
+      ? `🎁 Freebie Handover Confirmed! "${itemDisplayName}" is reserved for pickup at ${item.safeMeetupSpot}. Campus Pickup Pass #${passCode} generated.`
+      : `🤝 Meetup Arranged! "${itemDisplayName}" reserved for pickup at ${item.safeMeetupSpot}. Campus Handover Pass #${passCode} generated.`;
 
     addSystemMessage(id, confirmationText);
+    await updateAgreementStatus(id, 'accepted', { referenceCode: passCode });
     setTimeout(() => {
       scrollToBottom(true);
     }, 50);
   };
 
-  const handleCompleteAgreement = () => {
-    setAgreementStatus('completed');
+  const handleCompleteAgreement = async () => {
+    if (agreementStatus === 'completed') return;
 
-    const completionText = isSwap
-      ? `✅ Swap Trade Complete! Both items safely inspected and exchanged at ${item.safeMeetupSpot}. ~${item.estimatedCo2SavedKg} kg CO₂ diverted!`
-      : isFree
-      ? `✅ Freebie Handover Complete! Item received at ${item.safeMeetupSpot}. Thank you for paying it forward!`
-      : `✅ Item Retrieval Confirmed! "${itemDisplayName}" inspected and retrieved at ${item.safeMeetupSpot}. Handover successful!`;
+    const completionText = isViewerSeller
+      ? (isSwap
+          ? `✅ Swap Trade Handover Confirmed! Both items safely exchanged with ${counterpartDisplayName} at ${item.safeMeetupSpot}. ~${item.estimatedCo2SavedKg} kg CO₂ diverted!`
+          : isFree
+          ? `✅ Freebie Handover Confirmed! Item handed over to ${counterpartDisplayName} at ${item.safeMeetupSpot}. Thank you for paying it forward!`
+          : `✅ Item Handover Confirmed! "${itemDisplayName}" handed over to ${counterpartDisplayName} at ${item.safeMeetupSpot}. Handover successful!`)
+      : (isSwap
+          ? `✅ Swap Trade Retrieval Confirmed! Both items safely inspected and exchanged with ${counterpartDisplayName} at ${item.safeMeetupSpot}. ~${item.estimatedCo2SavedKg} kg CO₂ diverted!`
+          : isFree
+          ? `✅ Freebie Retrieval Confirmed! Item received from ${counterpartDisplayName} at ${item.safeMeetupSpot}. Thank you for paying it forward!`
+          : `✅ Item Retrieval Confirmed! "${itemDisplayName}" inspected and retrieved from ${counterpartDisplayName} at ${item.safeMeetupSpot}. Handover successful!`);
 
     addSystemMessage(id, completionText);
+
+    const nowIso = new Date().toISOString();
+    await updateAgreementStatus(
+      id,
+      'completed',
+      isViewerSeller ? { sellerConfirmedAt: nowIso } : { buyerConfirmedAt: nowIso }
+    );
+
+    // Release escrow if active escrow order exists
+    if (activeOrderId && (activeEscrowStatus === 'in_escrow' || activeEscrowStatus === 'held_in_escrow') && item?.price) {
+      const sellerId = item.sellerId || matchedConv?.sellerId || 'user_active_student';
+      releaseEscrowToSeller(activeOrderId, sellerId, item.price, itemDisplayName).catch(() => {});
+    }
+
     setTimeout(() => {
       scrollToBottom(true);
     }, 50);
 
-    // Prompt buyer rating pop-up (1 to 5 stars) after confirmation of item retrieval
-    setTimeout(() => {
-      setRatingModalVisible(true);
-    }, 380);
+    // Prompt peer rating pop-up only if the active student has not yet rated
+    if (!hasRatedPeer) {
+      setTimeout(() => {
+        setRatingModalVisible(true);
+      }, 380);
+    }
   };
 
-  const handleSubmitRating = () => {
-    if (selectedStars === 0) return;
+  const handleSubmitRating = async () => {
+    if (selectedStars === 0 || hasRatedPeer) return;
 
-    setHasRatedSeller(true);
-    setSellerRatingScore(selectedStars);
     setRatingModalVisible(false);
 
     const starIcons = '★'.repeat(selectedStars) + '☆'.repeat(5 - selectedStars);
@@ -346,9 +475,17 @@ export default function ChatScreen() {
       ? ` · "${ratingComment.trim()}"`
       : '';
 
-    const reviewSummary = `⭐ You rated ${sellerDisplayName} ${starIcons} (${label})${tagsNote}${commentNote}. Verified buyer review recorded!`;
+    const reviewSummary = `⭐ You rated ${counterpartRoleLabel.toLowerCase()} ${counterpartDisplayName} ${starIcons} (${label})${tagsNote}${commentNote}. Verified peer review recorded!`;
 
     addSystemMessage(id, reviewSummary);
+    await submitPeerRating(
+      id,
+      !isViewerSeller,
+      selectedStars,
+      selectedRatingTags,
+      ratingComment.trim() || undefined
+    );
+
     setTimeout(() => {
       scrollToBottom(true);
     }, 60);
@@ -407,7 +544,7 @@ export default function ChatScreen() {
                 fontWeight: '700',
                 color: theme.primary,
               }}>
-              {counterpartDisplayName.charAt(0).toUpperCase()}
+              {counterpartInitials}
             </Text>
           </View>
         )}
@@ -420,6 +557,25 @@ export default function ChatScreen() {
               {counterpartDisplayName}
             </Text>
             <Ionicons name="checkmark-circle" size={14} color={theme.primary} />
+            <View
+              style={{
+                backgroundColor: isViewerSeller ? theme.surfaceSubtle : theme.primaryLight,
+                paddingHorizontal: 6,
+                paddingVertical: 1,
+                borderRadius: Radius.full,
+                borderWidth: 1,
+                borderColor: isViewerSeller ? theme.border : theme.primary,
+                marginLeft: 4,
+              }}>
+              <Text
+                style={{
+                  fontSize: 10,
+                  color: isViewerSeller ? theme.textSecondary : theme.primary,
+                  fontWeight: '700',
+                }}>
+                {counterpartRoleLabel}
+              </Text>
+            </View>
           </View>
           <Text
             numberOfLines={1}
@@ -475,24 +631,40 @@ export default function ChatScreen() {
 
         {/* Quick action in bar depending on deal type & viewer role */}
         {!isViewerSeller && isBuy && item.price && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Pay ₱${item.price}`}
-            style={({ pressed }) => [
-              styles.actionPillButton,
-              {
-                backgroundColor: theme.primary,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-            onPress={() =>
-              router.push({
-                pathname: '/payment/[id]',
-                params: { id: item.id },
-              })
-            }>
-            <Text style={styles.actionPillButtonText}>Pay Escrow</Text>
-          </Pressable>
+          agreementStatus === 'pending' && matchedConv?.escrowStatus !== 'in_escrow' ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Pay ₱${item.price}`}
+              style={({ pressed }) => [
+                styles.actionPillButton,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              onPress={() =>
+                router.push({
+                  pathname: '/payment/[id]',
+                  params: { id: item.id },
+                })
+              }>
+              <Text style={styles.actionPillButtonText}>Pay Escrow</Text>
+            </Pressable>
+          ) : (
+            <View
+              style={[
+                styles.actionPillButton,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                },
+              ]}>
+              <Text style={[styles.actionPillButtonText, { color: theme.primary, fontWeight: '700' }]}>
+                {activeEscrowStatus === 'cod_pending' ? 'COD Pending' : 'Escrow Secured'}
+              </Text>
+            </View>
+          )
         )}
 
         {isViewerSeller && isBuy && (
@@ -510,41 +682,73 @@ export default function ChatScreen() {
         )}
 
         {isSwap && agreementStatus === 'pending' && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Accept swap trade"
-            style={({ pressed }) => [
-              styles.actionPillButton,
-              {
-                backgroundColor: theme.primary,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-            onPress={handleAcceptAgreement}>
-            <Text style={styles.actionPillButtonText}>Accept Swap</Text>
-          </Pressable>
+          isViewerSeller ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Accept swap trade"
+              style={({ pressed }) => [
+                styles.actionPillButton,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              onPress={handleAcceptAgreement}>
+              <Text style={styles.actionPillButtonText}>Accept Swap</Text>
+            </Pressable>
+          ) : (
+            <View
+              style={[
+                styles.actionPillButton,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                },
+              ]}>
+              <Text style={[styles.actionPillButtonText, { color: theme.textSecondary }]}>
+                Swap Proposed
+              </Text>
+            </View>
+          )
         )}
 
         {isFree && agreementStatus === 'pending' && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Confirm freebie acceptance"
-            style={({ pressed }) => [
-              styles.actionPillButton,
-              {
-                backgroundColor: theme.primary,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-            onPress={handleAcceptAgreement}>
-            <Text style={styles.actionPillButtonText}>Confirm Freebie</Text>
-          </Pressable>
+          isViewerSeller ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Confirm freebie reservation"
+              style={({ pressed }) => [
+                styles.actionPillButton,
+                {
+                  backgroundColor: theme.primary,
+                  opacity: pressed ? 0.85 : 1,
+                },
+              ]}
+              onPress={handleAcceptAgreement}>
+              <Text style={styles.actionPillButtonText}>Confirm Freebie</Text>
+            </Pressable>
+          ) : (
+            <View
+              style={[
+                styles.actionPillButton,
+                {
+                  backgroundColor: theme.surfaceSubtle,
+                  borderWidth: 1,
+                  borderColor: theme.border,
+                },
+              ]}>
+              <Text style={[styles.actionPillButtonText, { color: theme.textSecondary }]}>
+                Freebie Requested
+              </Text>
+            </View>
+          )
         )}
 
         {agreementStatus === 'accepted' && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Confirm item retrieval"
+            accessibilityLabel={isViewerSeller ? 'Confirm item handover' : 'Confirm item retrieval'}
             style={({ pressed }) => [
               styles.actionPillButton,
               {
@@ -553,18 +757,20 @@ export default function ChatScreen() {
               },
             ]}
             onPress={handleCompleteAgreement}>
-            <Text style={styles.actionPillButtonText}>Confirm Retrieval</Text>
+            <Text style={styles.actionPillButtonText}>
+              {isViewerSeller ? 'Confirm Handover' : 'Confirm Retrieval'}
+            </Text>
           </Pressable>
         )}
 
-        {!isViewerSeller && agreementStatus === 'completed' && (
+        {agreementStatus === 'completed' && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Rate seller 1 to 5 stars"
+            accessibilityLabel={`Rate ${counterpartRoleLabel.toLowerCase()} 1 to 5 stars`}
             style={({ pressed }) => [
               styles.actionPillButton,
               {
-                backgroundColor: hasRatedSeller ? theme.surfaceSubtle : '#FEF3C7',
+                backgroundColor: hasRatedPeer ? theme.surfaceSubtle : '#FEF3C7',
                 borderWidth: 1,
                 borderColor: '#F59E0B',
                 opacity: pressed ? 0.85 : 1,
@@ -574,9 +780,9 @@ export default function ChatScreen() {
             <Text
               style={[
                 styles.actionPillButtonText,
-                { color: hasRatedSeller ? theme.text : '#92400E' },
+                { color: hasRatedPeer ? theme.text : '#92400E' },
               ]}>
-              {hasRatedSeller ? `★ ${sellerRatingScore}/5` : 'Rate Seller'}
+              {hasRatedPeer ? `★ ${peerRatingScore}/5` : `Rate ${counterpartRoleLabel}`}
             </Text>
           </Pressable>
         )}
@@ -702,7 +908,7 @@ export default function ChatScreen() {
                       },
                     ]}>
                     {agreementStatus === 'completed'
-                      ? 'Item Retrieved'
+                      ? (isViewerSeller ? 'Handover Completed' : 'Item Retrieved')
                       : agreementStatus === 'accepted'
                       ? 'Trade Confirmed'
                       : isBuy
@@ -746,7 +952,7 @@ export default function ChatScreen() {
                       <Text style={[styles.detailValue, { color: theme.text }]}>
                         {exchangeItemName}
                       </Text>
-                      {agreementStatus === 'pending' && (
+                      {agreementStatus === 'pending' && !isViewerSeller && (
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel="Change offered trade item"
@@ -807,7 +1013,9 @@ export default function ChatScreen() {
                         styles.passCodeText,
                         { color: theme.primary },
                       ]}>
-                      {isSwap
+                      {activeReferenceCode
+                        ? `PASS #${activeReferenceCode}`
+                        : isSwap
                         ? 'PASS #SWAP-8492'
                         : isFree
                         ? 'PASS #FREE-3201'
@@ -820,45 +1028,68 @@ export default function ChatScreen() {
               {/* Action Buttons for Agreement */}
               {agreementStatus === 'pending' && (
                 <View style={styles.cardActionGroup}>
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      isSwap
-                        ? 'Confirm swap trade agreement'
-                        : isFree
-                        ? 'Confirm freebie reservation'
-                        : 'Confirm meetup arrangement'
-                    }
-                    style={({ pressed }) => [
-                      styles.confirmPrimaryButton,
-                      {
-                        backgroundColor: theme.primary,
-                        opacity: pressed ? 0.88 : 1,
-                      },
-                    ]}
-                    onPress={handleAcceptAgreement}>
-                    <Ionicons
-                      name={isSwap ? 'repeat' : 'checkmark-circle-outline'}
-                      size={18}
-                      color="#FFFFFF"
-                    />
-                    <Text style={styles.confirmPrimaryButtonText}>
-                      {isSwap
-                        ? 'Accept Swap Trade'
-                        : isFree
-                        ? 'Confirm Freebie Acceptance'
-                        : 'Confirm Meetup Plan'}
-                    </Text>
-                  </Pressable>
+                  {isViewerSeller ? (
+                    <>
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={
+                          isSwap
+                            ? 'Confirm swap trade agreement'
+                            : isFree
+                            ? 'Confirm freebie reservation'
+                            : 'Confirm meetup arrangement'
+                        }
+                        style={({ pressed }) => [
+                          styles.confirmPrimaryButton,
+                          {
+                            backgroundColor: theme.primary,
+                            opacity: pressed ? 0.88 : 1,
+                          },
+                        ]}
+                        onPress={handleAcceptAgreement}>
+                        <Ionicons
+                          name={isSwap ? 'repeat' : 'checkmark-circle-outline'}
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                        <Text style={styles.confirmPrimaryButtonText}>
+                          {isSwap
+                            ? 'Accept Swap Trade'
+                            : isFree
+                            ? 'Confirm Freebie Acceptance'
+                            : 'Confirm Meetup Plan'}
+                        </Text>
+                      </Pressable>
 
-                  <Text
-                    style={[
-                      styles.agreementHelperText,
-                      { color: theme.textMuted },
-                    ]}>
-                    Tapping confirm reserves the item and generates a campus
-                    handover pass for your meetup.
-                  </Text>
+                      <Text
+                        style={[
+                          styles.agreementHelperText,
+                          { color: theme.textMuted },
+                        ]}>
+                        Accepting reserves your item and issues a campus
+                        handover pass for your meetup with {counterpartDisplayName}.
+                      </Text>
+                    </>
+                  ) : (
+                    <View style={styles.confirmedNoticeRow}>
+                      <Ionicons
+                        name="time-outline"
+                        size={18}
+                        color={theme.primary}
+                      />
+                      <Text
+                        style={[
+                          styles.confirmedNoticeText,
+                          { color: theme.textSecondary },
+                        ]}>
+                        {isSwap
+                          ? `Swap proposal sent to ${counterpartDisplayName}. Waiting for the seller to review and accept.`
+                          : isFree
+                          ? `Freebie request sent to ${counterpartDisplayName}. Waiting for seller confirmation.`
+                          : `Meetup arrangement sent to ${counterpartDisplayName}. Waiting for confirmation.`}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               )}
 
@@ -875,14 +1106,19 @@ export default function ChatScreen() {
                         styles.confirmedNoticeText,
                         { color: theme.textSecondary },
                       ]}>
-                      Meet {counterpartDisplayName} at {item.safeMeetupSpot}. Once
-                      retrieved and inspected, tap below to confirm.
+                      {isViewerSeller
+                        ? `Meet ${counterpartDisplayName} at ${item.safeMeetupSpot}. Hand over the item, then tap below to confirm handover.`
+                        : `Meet ${counterpartDisplayName} at ${item.safeMeetupSpot}. Once retrieved and inspected, tap below to confirm retrieval.`}
                     </Text>
                   </View>
 
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel="Confirm item retrieval and handover"
+                    accessibilityLabel={
+                      isViewerSeller
+                        ? `Confirm item handover to ${counterpartDisplayName}`
+                        : `Confirm item retrieval from ${counterpartDisplayName}`
+                    }
                     style={({ pressed }) => [
                       styles.completeButton,
                       {
@@ -902,7 +1138,7 @@ export default function ChatScreen() {
                         styles.completeButtonText,
                         { color: '#FFFFFF' },
                       ]}>
-                      Confirm Item Retrieval
+                      {isViewerSeller ? 'Confirm Item Handover' : 'Confirm Item Retrieval'}
                     </Text>
                   </Pressable>
                 </View>
@@ -918,12 +1154,14 @@ export default function ChatScreen() {
                     />
                     <Text
                       style={[styles.completedNoticeText, { color: theme.text }]}>
-                      Handover completed on campus! Item retrieved and verified.
+                      {isViewerSeller
+                        ? `Handover completed on campus! Item handed over to ${counterpartDisplayName}.`
+                        : `Retrieval completed on campus! Item retrieved from ${counterpartDisplayName}.`}
                     </Text>
                   </View>
 
-                  {/* Rating summary or call to rate (buyer only) */}
-                  {!isViewerSeller && (hasRatedSeller && sellerRatingScore ? (
+                  {/* Rating summary or call to rate */}
+                  {hasRatedPeer && peerRatingScore ? (
                     <View
                       style={[
                         styles.ratedSummaryBox,
@@ -938,13 +1176,13 @@ export default function ChatScreen() {
                             <Ionicons
                               key={s}
                               name={
-                                s <= sellerRatingScore
+                                s <= peerRatingScore
                                   ? 'star'
                                   : 'star-outline'
                               }
                               size={14}
                               color={
-                                s <= sellerRatingScore
+                                s <= peerRatingScore
                                   ? '#F59E0B'
                                   : theme.textMuted
                               }
@@ -956,7 +1194,7 @@ export default function ChatScreen() {
                             styles.ratedScoreBadgeText,
                             { color: '#F59E0B' },
                           ]}>
-                          {sellerRatingScore}/5 Stars
+                          {peerRatingScore}/5 Stars
                         </Text>
                       </View>
                       <Text
@@ -964,11 +1202,11 @@ export default function ChatScreen() {
                           styles.ratedFeedbackText,
                           { color: theme.textSecondary },
                         ]}>
-                        You rated {sellerDisplayName} · Verified Peer Review
+                        You rated {counterpartRoleLabel.toLowerCase()} {counterpartDisplayName} · Verified Peer Review
                       </Text>
                       <Pressable
                         accessibilityRole="button"
-                        accessibilityLabel="Update rating for seller"
+                        accessibilityLabel={`Update rating for ${counterpartDisplayName}`}
                         onPress={() => setRatingModalVisible(true)}
                         hitSlop={6}
                         style={styles.editRatingBtn}>
@@ -984,7 +1222,7 @@ export default function ChatScreen() {
                   ) : (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel="Rate seller 1 to 5 stars"
+                      accessibilityLabel={`Rate ${counterpartDisplayName} 1 to 5 stars`}
                       style={({ pressed }) => [
                         styles.rateSellerPromptBtn,
                         {
@@ -996,10 +1234,10 @@ export default function ChatScreen() {
                       onPress={() => setRatingModalVisible(true)}>
                       <Ionicons name="star" size={16} color="#D97706" />
                       <Text style={styles.rateSellerPromptText}>
-                        Rate {sellerDisplayName} (1–5 Stars)
+                        Rate {counterpartRoleLabel} ({counterpartDisplayName}) · 1–5 Stars
                       </Text>
                     </Pressable>
-                  ))}
+                  )}
                 </View>
               )}
             </View>
@@ -1172,7 +1410,7 @@ export default function ChatScreen() {
             placeholder={
               pendingImageUri
                 ? 'Add an optional photo caption...'
-                : `Message ${sellerDisplayName}...`
+                : `Message ${counterpartDisplayName}...`
             }
             placeholderTextColor={theme.textMuted}
             value={inputMessage}
@@ -1358,14 +1596,16 @@ export default function ChatScreen() {
                 <Ionicons name="star" size={24} color="#F59E0B" />
               </View>
               <Text style={[styles.ratingTitle, { color: theme.text }]}>
-                Rate Your Seller
+                Rate Your {counterpartRoleLabel}
               </Text>
               <Text
                 style={[
                   styles.ratingSubtitle,
                   { color: theme.textSecondary },
                 ]}>
-                How was your item retrieval with {sellerDisplayName}?
+                {isViewerSeller
+                  ? `How was your handover experience with ${counterpartDisplayName}?`
+                  : `How was your item retrieval with ${counterpartDisplayName}?`}
               </Text>
               <View
                 style={[
@@ -1473,8 +1713,8 @@ export default function ChatScreen() {
 
             {/* Optional Comment Input */}
             <TextInput
-              accessibilityLabel="Optional seller review note"
-              placeholder={`Leave an optional note for ${sellerDisplayName}...`}
+              accessibilityLabel={`Optional ${counterpartRoleLabel.toLowerCase()} review note`}
+              placeholder={`Leave an optional note for ${counterpartDisplayName}...`}
               placeholderTextColor={theme.textMuted}
               value={ratingComment}
               onChangeText={setRatingComment}
@@ -1494,7 +1734,7 @@ export default function ChatScreen() {
             <View style={styles.ratingActionsRow}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Submit rating for seller"
+                accessibilityLabel={`Submit rating for ${counterpartDisplayName}`}
                 disabled={selectedStars === 0}
                 style={({ pressed }) => [
                   styles.submitRatingBtn,

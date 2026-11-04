@@ -230,7 +230,9 @@ export default function BasketScreen() {
                       params: {
                         id: item.id,
                         sellerName: item.sellerName,
+                        sellerAvatarUri: item.sellerAvatarUri || undefined,
                         itemTitle: item.title,
+                        isSeller: 'false',
                       },
                     });
                   }}>

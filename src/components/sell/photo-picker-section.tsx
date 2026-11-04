@@ -28,29 +28,6 @@ interface PhotoPickerSectionProps {
   maxPhotos?: number;
 }
 
-// Realistic campus preset photos for fast simulator/web verification
-const SAMPLE_PRESETS: { title: string; uri: string; label: string }[] = [
-  {
-    title: 'Textbook / Reviewer',
-    uri: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&q=80',
-    label: 'Front Cover',
-  },
-  {
-    title: 'BS Tourism Corporate Blazer',
-    uri: 'https://images.unsplash.com/photo-1585240975858-7264fd020798?w=600&q=80',
-    label: 'Blazer & Scarf Set',
-  },
-  {
-    title: 'Casio Calculator',
-    uri: 'https://images.unsplash.com/photo-1587145820266-a5951ee6f620?w=600&q=80',
-    label: 'Display & Keypad',
-  },
-  {
-    title: 'Dorm Study Lamp',
-    uri: 'https://images.unsplash.com/photo-1507473885765-e6ed057f782c?w=600&q=80',
-    label: 'Desk Setup',
-  },
-];
 
 export function PhotoPickerSection({
   photos,
@@ -136,19 +113,6 @@ export function PhotoPickerSection({
     }
   };
 
-  // Add realistic sample photo for testing
-  const handleAddSamplePreset = (preset: typeof SAMPLE_PRESETS[0]) => {
-    setModalVisible(false);
-    if (photos.length >= maxPhotos) return;
-
-    const newPhoto: UploadedPhoto = {
-      id: getNextId('sample'),
-      uri: preset.uri,
-      label: photos.length === 0 ? 'Cover Photo' : preset.label,
-    };
-    onPhotosChange([...photos, newPhoto]);
-  };
-
   // Remove photo
   const handleRemovePhoto = (id: string) => {
     const updated = photos.filter((p) => p.id !== id);
@@ -224,24 +188,7 @@ export function PhotoPickerSection({
             </Pressable>
           </View>
 
-          {/* Quick preset chips for rapid testing */}
-          <View style={[styles.heroPresetDivider, { borderTopColor: theme.border }]}>
-            <Text style={[styles.heroPresetLabel, { color: theme.textSecondary }]}>
-              Quick Samples (For Testing):
-            </Text>
-            <View style={styles.heroPresetChips}>
-              {SAMPLE_PRESETS.map((preset) => (
-                <Pressable
-                  key={preset.title}
-                  style={[styles.heroSampleChip, { borderColor: theme.border, backgroundColor: theme.surfaceSubtle }]}
-                  onPress={() => handleAddSamplePreset(preset)}>
-                  <Text style={[styles.heroSampleChipText, { color: theme.text }]}>
-                    + {preset.title}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+
         </View>
       ) : (
         /* Case B: Photos Exist -> Hero Cover Preview + Secondary Thumbnails */
@@ -491,34 +438,6 @@ const styles = StyleSheet.create({
   heroSecondaryBtnText: {
     fontSize: 14,
     fontWeight: '600',
-  },
-  heroPresetDivider: {
-    width: '100%',
-    marginTop: Spacing.four,
-    paddingTop: Spacing.three,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  heroPresetLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: Spacing.two,
-  },
-  heroPresetChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.two,
-  },
-  heroSampleChip: {
-    paddingHorizontal: Spacing.two,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  heroSampleChipText: {
-    fontSize: 11,
-    fontWeight: '500',
   },
   filledContainer: {
     gap: Spacing.three,
