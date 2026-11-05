@@ -29,7 +29,10 @@ export function ItemCard({ item }: ItemCardProps) {
   const [currentUserName, setCurrentUserName] = useState('');
 
   useEffect(() => {
-    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+    AsyncStorage.getItem('@uniswap_user_profile').then(async (str) => {
+      if (!str) {
+        str = await AsyncStorage.getItem('@campusgreen_user_profile');
+      }
       if (str) {
         try {
           const parsed = JSON.parse(str);

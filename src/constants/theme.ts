@@ -1,5 +1,5 @@
 /**
- * CampusGreen Connect Design System
+ * UniSwap Design System
  * Tailored for Filipino college students with warm university tones,
  * deep forest academic green, and crisp, legible cards.
  */
@@ -10,7 +10,7 @@ import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    // CampusGreen Brand
+    // UniSwap Brand
     primary: '#1F5C3A',
     primaryDark: '#18482D',
     primaryLight: '#E6EFE9',

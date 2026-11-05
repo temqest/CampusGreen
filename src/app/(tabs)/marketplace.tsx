@@ -81,7 +81,7 @@ export default function MarketplaceScreen() {
   const loadUserActivity = useCallback(async () => {
     try {
       let activeUserId = 'user_active_student';
-      const local = await AsyncStorage.getItem('@campusgreen_user_profile');
+      const local = (await AsyncStorage.getItem('@uniswap_user_profile')) || (await AsyncStorage.getItem('@campusgreen_user_profile'));
       if (local) {
         const parsed = JSON.parse(local);
         if (parsed.id) {

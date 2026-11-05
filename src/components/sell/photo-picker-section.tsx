@@ -51,7 +51,7 @@ export function PhotoPickerSection({
       if (status !== 'granted') {
         Alert.alert(
           'Photo Library Access Required',
-          'CampusGreen needs permission to access your photo library so you can upload pictures of your item.'
+          'UniSwap needs permission to access your photo library so you can upload pictures of your item.'
         );
         return;
       }
@@ -87,7 +87,7 @@ export function PhotoPickerSection({
       if (status !== 'granted') {
         Alert.alert(
           'Camera Access Required',
-          'CampusGreen needs camera permission so you can take clear photos of your items.'
+          'UniSwap needs camera permission so you can take clear photos of your items.'
         );
         return;
       }

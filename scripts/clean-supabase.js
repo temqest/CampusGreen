@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 /**
- * CampusGreen - Supabase Schema Data Cleaner
+ * UniSwap - Supabase Schema Data Cleaner
  * 
- * Safely cleans out test data ONLY from the application tables belonging to CampusGreen.
+ * Safely cleans out test data ONLY from the application tables belonging to UniSwap.
  * Never affects auth.users, internal storage tables, or other project schemas.
  * 
  * Target Application Tables:
@@ -72,7 +72,7 @@ const args = process.argv.slice(2);
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`
-🌿 CampusGreen Supabase Schema Data Cleaner
+🌿 UniSwap Supabase Schema Data Cleaner
 
 Usage:
   node ./scripts/clean-supabase.js [options]
@@ -199,7 +199,7 @@ async function cleanStorageBucket(bucketName) {
 
 async function runCleaner() {
   console.log('====================================================');
-  console.log('🌿 CampusGreen: Supabase Schema Data Cleaner');
+  console.log('🌿 UniSwap: Supabase Schema Data Cleaner');
   console.log('====================================================');
   console.log(`Target Supabase URL: ${supabaseUrl}`);
   console.log(`Execution Mode:      ${dryRun ? '🔍 DRY RUN (No records deleted)' : '⚡ LIVE CLEAN'}`);
@@ -213,7 +213,7 @@ async function runCleaner() {
   const skipped = ALL_APP_TABLES.filter((t) => !t.condition);
 
   // 1. Inspect current table counts
-  console.log('\n📊 Current Row Counts in CampusGreen Schema:');
+  console.log('\n📊 Current Row Counts in UniSwap Schema:');
   const initialCounts = {};
   for (const table of ALL_APP_TABLES) {
     const { count, error } = await getRowCount(table.name);

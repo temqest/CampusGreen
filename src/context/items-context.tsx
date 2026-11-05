@@ -113,8 +113,11 @@ export function ItemsProvider({ children }: { children: React.ReactNode }) {
       });
 
     // Load Escrow Wallet transactions from Supabase
-    AsyncStorage.getItem('@campusgreen_user_profile')
-      .then((str) => {
+    AsyncStorage.getItem('@uniswap_user_profile')
+      .then(async (str) => {
+        if (!str) {
+          str = await AsyncStorage.getItem('@campusgreen_user_profile');
+        }
         let activeUserId = 'user_active_student';
         if (str) {
           try {

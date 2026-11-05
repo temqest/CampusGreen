@@ -156,7 +156,7 @@ export default function ProfileScreen() {
       try {
         let activeUserId = 'user_active_student';
         // 1. Check locally saved student profile
-        const local = await AsyncStorage.getItem('@campusgreen_user_profile');
+        const local = (await AsyncStorage.getItem('@uniswap_user_profile')) || (await AsyncStorage.getItem('@campusgreen_user_profile'));
         if (local && isMounted) {
           const parsed = JSON.parse(local);
           if (parsed.id) {
@@ -460,7 +460,7 @@ export default function ProfileScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Photo Library Access Required',
-          'CampusGreen needs permission to access your photo library so you can upload your student profile picture.'
+          'UniSwap needs permission to access your photo library so you can upload your student profile picture.'
         );
         return;
       }
@@ -510,7 +510,7 @@ export default function ProfileScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Camera Access Required',
-          'CampusGreen needs camera permission so you can take a profile photo.'
+          'UniSwap needs camera permission so you can take a profile photo.'
         );
         return;
       }
@@ -600,7 +600,7 @@ export default function ProfileScreen() {
     }).catch((err) => console.warn('Supabase save profile error:', err));
 
     AsyncStorage.setItem(
-      '@campusgreen_user_profile',
+      '@uniswap_user_profile',
       JSON.stringify({
         id: profileId,
         fullName: updatedName,

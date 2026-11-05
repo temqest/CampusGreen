@@ -236,7 +236,7 @@ export default function SellScreen() {
       let activeSellerYear = 'Verified Student';
       let activeSellerId = 'user_active_student';
       try {
-        const local = await AsyncStorage.getItem('@campusgreen_user_profile');
+        const local = (await AsyncStorage.getItem('@uniswap_user_profile')) || (await AsyncStorage.getItem('@campusgreen_user_profile'));
         if (local) {
           const parsed = JSON.parse(local);
           if (parsed.fullName) activeSellerName = parsed.fullName;

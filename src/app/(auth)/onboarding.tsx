@@ -166,7 +166,7 @@ export default function OnboardingScreen() {
       };
 
       try {
-        await AsyncStorage.setItem('@campusgreen_user_profile', JSON.stringify(profilePayload));
+        await AsyncStorage.setItem('@uniswap_user_profile', JSON.stringify(profilePayload));
         await saveProfileToSupabase(profilePayload);
       } catch (err) {
         console.warn('Error saving onboarded user profile:', err);

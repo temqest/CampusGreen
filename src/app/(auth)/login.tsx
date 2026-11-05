@@ -89,7 +89,7 @@ export default function LoginScreen() {
 
       // Always sync the user profile locally with their unique student ID
       await AsyncStorage.setItem(
-        '@campusgreen_user_profile',
+        '@uniswap_user_profile',
         JSON.stringify({ ...activePayload, id: computedUserId })
       );
 

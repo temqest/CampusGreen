@@ -15,6 +15,27 @@ import {
 } from '@/lib/database';
 import { formatConversationTime, formatMessageTime } from '@/utils/format-time';
 
+const CHAT_CONVERSATIONS_KEY = '@uniswap_chat_conversations';
+const LEGACY_CHAT_KEY = '@campusgreen_chat_conversations';
+const USER_PROFILE_KEY = '@uniswap_user_profile';
+const LEGACY_PROFILE_KEY = '@campusgreen_user_profile';
+
+async function getStoredUserProfile(): Promise<string | null> {
+  const current = await AsyncStorage.getItem(USER_PROFILE_KEY);
+  if (current) return current;
+  return AsyncStorage.getItem(LEGACY_PROFILE_KEY);
+}
+
+async function getStoredConversations(): Promise<string | null> {
+  const current = await AsyncStorage.getItem(CHAT_CONVERSATIONS_KEY);
+  if (current) return current;
+  return AsyncStorage.getItem(LEGACY_CHAT_KEY);
+}
+
+function persistLocalConversations(list: ChatConversation[]) {
+  AsyncStorage.setItem(CHAT_CONVERSATIONS_KEY, JSON.stringify(list)).catch(() => {});
+}
+
 export interface Message {
   id: string;
   sender: 'me' | 'seller' | 'buyer' | 'system';
@@ -107,7 +128,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       let sellerName = '';
       let activeUserId = 'user_active_student';
       try {
-        const stored = await AsyncStorage.getItem('@campusgreen_user_profile');
+        const stored = await getStoredUserProfile();
         if (stored) {
           const parsed = JSON.parse(stored);
           if (parsed.fullName) sellerName = parsed.fullName.trim();
@@ -123,9 +144,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (liveConvs && liveConvs.length > 0) {
         setConversations(liveConvs);
         conversationsRef.current = liveConvs;
-        AsyncStorage.setItem('@campusgreen_chat_conversations', JSON.stringify(liveConvs)).catch(() => {});
+        persistLocalConversations(liveConvs);
       } else {
-        const cached = await AsyncStorage.getItem('@campusgreen_chat_conversations');
+        const cached = await getStoredConversations();
         if (cached) {
           try {
             const parsedCached = JSON.parse(cached);
@@ -138,7 +159,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (err) {
       console.warn('Error refreshing conversations:', err);
-      const cached = await AsyncStorage.getItem('@campusgreen_chat_conversations');
+      const cached = await getStoredConversations();
       if (cached) {
         try {
           const parsedCached = JSON.parse(cached);
@@ -157,7 +178,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     let isMounted = true;
 
     // Fast-path: load cached conversations from AsyncStorage first
-    AsyncStorage.getItem('@campusgreen_chat_conversations')
+    getStoredConversations()
       .then((cached) => {
         if (isMounted && cached) {
           try {
@@ -172,7 +193,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {});
 
-    AsyncStorage.getItem('@campusgreen_user_profile')
+    getStoredUserProfile()
       .then((stored) => {
         let sellerName = '';
         let activeUserId = 'user_active_student';
@@ -195,7 +216,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         if (isMounted && convs && convs.length > 0) {
           setConversations(convs);
           conversationsRef.current = convs;
-          AsyncStorage.setItem('@campusgreen_chat_conversations', JSON.stringify(convs)).catch(() => {});
+          persistLocalConversations(convs);
         }
       })
       .catch((err) => {
@@ -287,7 +308,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           setConversations((prev) => [merged, ...prev.filter((c) => c.itemId !== item.id)]);
           const nextList = [merged, ...conversationsRef.current.filter((c) => c.itemId !== item.id)];
           conversationsRef.current = nextList;
-          AsyncStorage.setItem('@campusgreen_chat_conversations', JSON.stringify(nextList)).catch(() => {});
+          persistLocalConversations(nextList);
           saveChatConversationToSupabase(merged, merged.userId || 'user_active_student').catch((err) =>
             console.warn('Supabase save merged conversation error:', err)
           );
@@ -329,7 +350,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setConversations((prev) => [newConv, ...prev.filter((c) => c.itemId !== item.id)]);
       const nextList = [newConv, ...conversationsRef.current.filter((c) => c.itemId !== item.id)];
       conversationsRef.current = nextList;
-      AsyncStorage.setItem('@campusgreen_chat_conversations', JSON.stringify(nextList)).catch(() => {});
+      persistLocalConversations(nextList);
 
       saveChatConversationToSupabase(newConv, newConv.userId || 'user_active_student').catch((err) =>
         console.warn('Supabase save auto-generated conversation error:', err)
@@ -357,7 +378,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setConversations((prev) => [updated, ...prev.filter((c) => c.itemId !== itemId)]);
       const nextList = [updated, ...conversationsRef.current.filter((c) => c.itemId !== itemId)];
       conversationsRef.current = nextList;
-      AsyncStorage.setItem('@campusgreen_chat_conversations', JSON.stringify(nextList)).catch(() => {});
+      persistLocalConversations(nextList);
 
       await saveChatConversationToSupabase(
         updated,
@@ -396,7 +417,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setConversations((prev) => [updated, ...prev.filter((c) => c.itemId !== itemId)]);
       const nextList = [updated, ...conversationsRef.current.filter((c) => c.itemId !== itemId)];
       conversationsRef.current = nextList;
-      AsyncStorage.setItem('@campusgreen_chat_conversations', JSON.stringify(nextList)).catch(() => {});
+      persistLocalConversations(nextList);
 
       await saveChatConversationToSupabase(
         updated,
@@ -516,7 +537,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       });
 
       // Persist conversation to Supabase with the active user's ID
-      AsyncStorage.getItem('@campusgreen_user_profile')
+      getStoredUserProfile()
         .then((stored) => {
           let activeUserId = 'user_active_student';
           if (stored) {
@@ -536,7 +557,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       // 4. Determine if the seller is an actual human user
       // If the item belongs to an actual user (created via sell tab or has sellerId or matches active profile),
       // DO NOT auto-reply. Auto-reply is strictly reserved for the automated demo/mock student catalogue.
-      AsyncStorage.getItem('@campusgreen_user_profile')
+      getStoredUserProfile()
         .then((storedProfile) => {
           let currentUserId = '';
           let currentUserName = '';

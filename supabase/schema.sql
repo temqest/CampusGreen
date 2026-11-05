@@ -1,4 +1,4 @@
--- CampusGreen Supabase Schema & Storage Configuration
+-- UniSwap Supabase Schema & Storage Configuration
 
 -- 1. PROFILES TABLE
 create table if not exists public.profiles (

@@ -10,10 +10,10 @@ export default function RootLayout() {
       <ItemsProvider>
         <BasketProvider>
           <ChatProvider>
-            <Stack screenOptions={{ headerShown: false, title: 'Campus Green' }}>
-              <Stack.Screen name="index" options={{ title: 'Campus Green' }} />
-              <Stack.Screen name="(auth)" options={{ title: 'Campus Green' }} />
-              <Stack.Screen name="(tabs)" options={{ title: 'Campus Green' }} />
+            <Stack screenOptions={{ headerShown: false, title: 'UniSwap' }}>
+              <Stack.Screen name="index" options={{ title: 'UniSwap' }} />
+              <Stack.Screen name="(auth)" options={{ title: 'UniSwap' }} />
+              <Stack.Screen name="(tabs)" options={{ title: 'UniSwap' }} />
               <Stack.Screen name="item/[id]" />
               <Stack.Screen name="payment/[id]" />
               <Stack.Screen name="chat/[id]" />

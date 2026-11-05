@@ -49,7 +49,10 @@ export default function PaymentScreen() {
 
   // Prevent purchasing own listing
   useEffect(() => {
-    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+    AsyncStorage.getItem('@uniswap_user_profile').then(async (str) => {
+      if (!str) {
+        str = await AsyncStorage.getItem('@campusgreen_user_profile');
+      }
       let currentUserId = '';
       let currentUserName = '';
       if (str) {
@@ -122,7 +125,10 @@ export default function PaymentScreen() {
           }. Reference #${code}. Meetup zone: ${item.safeMeetupSpot}. Campus Pass #BUY-5120 issued.`
         );
 
-        AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+        AsyncStorage.getItem('@uniswap_user_profile').then(async (str) => {
+          if (!str) {
+            str = await AsyncStorage.getItem('@campusgreen_user_profile');
+          }
           let activeUserId = 'user_active_student';
           if (str) {
             try {
@@ -213,7 +219,7 @@ export default function PaymentScreen() {
               style={[styles.successSubtitle, { color: theme.textSecondary }]}>
               {selectedMethod === 'cod'
                 ? `Your order is reserved with ${item.sellerName}. Prepare ₱${formatAmount(totalAmount)} in exact cash to pay in person upon inspecting the item at ${item.safeMeetupSpot}.`
-                : `₱${formatAmount(totalAmount)} is safely held by CampusGreen until you meet ${item.sellerName} and confirm item inspection.`}
+                : `₱${formatAmount(totalAmount)} is safely held by UniSwap until you meet ${item.sellerName} and confirm item inspection.`}
             </Text>
           </View>
 
@@ -355,7 +361,7 @@ export default function PaymentScreen() {
               style={[styles.disclaimerBody, { color: theme.textSecondary }]}>
               Once the item is handed over by {item.sellerName}, you have 72
               hours to inspect it and raise any concern. If you do not respond
-              or report an issue within 72 hours, CampusGreen will automatically
+              or report an issue within 72 hours, UniSwap will automatically
               mark the transaction as completed without issue and release the
               payment to the seller.
             </Text>
@@ -530,7 +536,7 @@ export default function PaymentScreen() {
                 styles.escrowBannerTitle,
                 { color: theme.text },
               ]}>
-              CampusGreen Student Escrow Protection
+              UniSwap Student Escrow Protection
             </Text>
             <Text
               style={[

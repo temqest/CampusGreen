@@ -1,19 +1,19 @@
 {
   "expo": {
-    "name": "Campus Green",
-    "slug": "campusgreen",
+    "name": "UniSwap",
+    "slug": "uniswap",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "campusgreen",
+    "scheme": "uniswap",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "com.campusgreen.app",
+      "package": "com.uniswap.app",
       "adaptiveIcon": {
-        "backgroundColor": "#1e8c5a",
+        "backgroundColor": "#328c5a",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -32,7 +32,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#1e8c5a",
+          "backgroundColor": "#328c5a",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 100
         }
@@ -40,8 +40,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Campus Green needs access to your photos to upload images of your textbooks and campus gear.",
-          "cameraPermission": "Campus Green needs access to your camera so you can take clear photos of your items."
+          "photosPermission": "UniSwap needs access to your photos to upload images of your textbooks and campus gear.",
+          "cameraPermission": "UniSwap needs access to your camera so you can take clear photos of your items."
         }
       ]
     ],

@@ -166,7 +166,7 @@ export default function MobileWelcomeScreen() {
         <View style={styles.topBarSpacer} />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="About CampusGreen"
+          accessibilityLabel="About UniSwap"
           onPress={() => setHelpModalVisible(true)}
           hitSlop={12}
           style={({ pressed }) => [
@@ -260,7 +260,7 @@ export default function MobileWelcomeScreen() {
             },
           ]}>
           {/* Sleek Brand Eyebrow (Clean text, no decorative pill) */}
-          <Text style={styles.brandEyebrow}>CAMPUSGREEN</Text>
+          <Text style={styles.brandEyebrow}>UNISWAP</Text>
 
           {/* High-Contrast Bold Headline */}
           <Text style={styles.headline}>
@@ -316,7 +316,7 @@ export default function MobileWelcomeScreen() {
             <View style={styles.modalHeader}>
               <View style={styles.modalBadge}>
                 <Ionicons name="leaf" size={14} color="#34D399" />
-                <Text style={styles.modalBadgeText}>About CampusGreen</Text>
+                <Text style={styles.modalBadgeText}>About UniSwap</Text>
               </View>
               <Pressable
                 accessibilityRole="button"
@@ -330,7 +330,7 @@ export default function MobileWelcomeScreen() {
 
             <Text style={styles.modalTitle}>Verified Student Marketplace</Text>
             <Text style={styles.modalDescription}>
-              CampusGreen connects verified college peers to buy, swap, and share dorm goods,
+              UniSwap connects verified college peers to buy, swap, and share dorm goods,
               uniforms, textbooks, and gear safely within campus boundaries.
             </Text>
 

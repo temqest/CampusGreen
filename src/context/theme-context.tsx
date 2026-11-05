@@ -23,7 +23,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useRNColorScheme();
   const [themeMode, setThemeModeState] = useState<ThemeMode>(() => {
     if (typeof window !== 'undefined' && window.localStorage) {
-      const saved = window.localStorage.getItem('campusgreen_theme_mode');
+      const saved = window.localStorage.getItem('uniswap_theme_mode') || window.localStorage.getItem('campusgreen_theme_mode');
       if (saved === 'light' || saved === 'dark' || saved === 'system') {
         return saved;
       }
@@ -34,7 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setThemeMode = (mode: ThemeMode) => {
     setThemeModeState(mode);
     if (typeof window !== 'undefined' && window.localStorage) {
-      window.localStorage.setItem('campusgreen_theme_mode', mode);
+      window.localStorage.setItem('uniswap_theme_mode', mode);
     }
   };
 

@@ -1,4 +1,4 @@
-# CampusGreen Connect — Design & Architecture Learnings
+# UniSwap — Design & Architecture Learnings
 
 This document captures project-specific design standards, user preferences, and hard architectural constraints learned from active feedback. **Always read this file before designing or modifying UI in this project.**
 
@@ -30,7 +30,7 @@ This document captures project-specific design standards, user preferences, and 
   - Never auto-check, pre-select, or default-highlight options in multi-choice lists, filter drawers, onboarding questions, or category selectors.
   - The app must never assume the student's choices; selections must start clean (`[]`, `''`, `null`). The user must make deliberate, active choices.
 - ❌ **No Guest Access / Explore as Guest**:
-  - CampusGreen is strictly a student-only verified marketplace. Guest mode breaks the primary objective of safety, accountability, and student trust. Never provide guest browsing pathways.
+  - UniSwap is strictly a student-only verified marketplace. Guest mode breaks the primary objective of safety, accountability, and student trust. Never provide guest browsing pathways.
 - ❌ **No Fake Verification Roadblocks in PoC**:
   - Do not stall early-stage user onboarding with mock PIN verification codes, simulated student ID scanner hurdles, or fake KYC walls. Focus on the core exchange value: discovering items, matching student needs, and trading gear.
 - ❌ **No Top-Heavy Alternative SSO Buttons**:
@@ -57,7 +57,7 @@ This document captures project-specific design standards, user preferences, and 
 - ✅ **Harmonious Vector Visual Motifs**:
   - Build warm, balanced geometric or iconography compositions using native React Native components (e.g., the connected 3-circle community motif representing academics, sustainability, and student exchange).
 - ✅ **Warm, Honest Editorial Copy**:
-  - Clear app title: `CampusGreen`
+  - Clear app title: `UniSwap`
   - Welcoming, grounded headline: *"Where campus gear finds a second life."*
   - Concise 1–2 sentence description of what the app actually does.
 - ✅ **Single-Driver Seamless Animations & Screen Focus Resumption**:
@@ -244,7 +244,7 @@ This document captures project-specific design standards, user preferences, and 
 - **App Appearance Management**:
   - Theme switching must support 3 distinct modes: `'system' | 'light' | 'dark'`.
   - Provide a centralized `ThemeProvider` (`src/context/theme-context.tsx`) wrapping the root navigator so any screen or component using `useTheme()` reacts immediately to user preferences.
-  - On web platforms, persist preference across sessions in `localStorage` under `campusgreen_theme_mode`.
+  - On web platforms, persist preference across sessions in `localStorage` under `uniswap_theme_mode`.
   - When authoring theme selection modals, represent options with distinct vector iconography (`phone-portrait-outline` for system, `sunny-outline` for light, `moon-outline` for dark) and radio checkmarks.
 - **Accurate Action Descriptions in Settings**:
   - Never use identity metadata (e.g. `"Signed in as user@campus.edu.ph"`) as the secondary helper text for a destructive or terminal action like **Log Out**.
@@ -444,14 +444,14 @@ This document captures project-specific design standards, user preferences, and 
 
 ### 30. Supabase Authentication & Profile Verification
 - **Real Login Verification**: `login.tsx` queries Supabase auth and the `profiles` table by email. If an account does not exist or credentials fail, it rejects the attempt with *"No verified student account found with this email. Please check your credentials or tap Sign Up to create an account."*
-- **Proper Session Tear-down on Logout**: Tapping **Log Out** in `profile.tsx` clears `@campusgreen_user_profile` from `AsyncStorage` and calls `supabase.auth.signOut()`, preventing stale profile data from bleeding into subsequent login sessions.
+- **Proper Session Tear-down on Logout**: Tapping **Log Out** in `profile.tsx` clears `@uniswap_user_profile` from `AsyncStorage` and calls `supabase.auth.signOut()`, preventing stale profile data from bleeding into subsequent login sessions.
 - **Account-Bound Profile State**: On login, the matched profile is loaded into local storage and synced to the active student session.
 
 ### 31. Multi-Student Account Isolation & Cross-Account Data Separation
 - **Unique Student User IDs**:
   - Never hardcode user identifiers like `'user_active_student'` across the codebase.
   - Generate deterministic, isolated user IDs for each student account using their email address (e.g. `getStudentUserId(email, fullName)` producing `user_pvillamer_adnu_edu_ph` or `user_john_unc_edu_ph`).
-  - Store this `id` directly within `@campusgreen_user_profile` in `AsyncStorage`.
+  - Store this `id` directly within `@uniswap_user_profile` in `AsyncStorage`.
 - **Dynamic Identity Ownership Checks**:
   - In `item/[id].tsx`, `chat/[id].tsx`, and `marketplace.tsx`, check listing ownership by comparing `item.sellerId === currentUserId` or comparing normalized lowercase `item.sellerName === currentUserName`.
   - Prevent students from starting chat purchases, swaps, or transactions with their own items, while allowing other student accounts to freely buy, swap, or chat with them.
@@ -461,7 +461,7 @@ This document captures project-specific design standards, user preferences, and 
 
 ### 32. Welcome Landing Screen Modernization & Brand Eyebrow Invariant
 - **Deep Slate Canvas Over Flat Black**: Avoid flat pitch-black `#000000` backgrounds. Use deep tinted slate/charcoal (`#0A0F0D`) paired with an ambient emerald radial backlight (`react-native-svg` RadialGradient at ~0.22 opacity) to deliver a sleek, modern fintech/edtech feel (Linear/Cash App vibe).
-- **Brand Eyebrow Invariant (No Decorative Pill)**: Never wrap "CAMPUSGREEN" in a pill badge or container. Keep it as a pure, tracked-out, bold uppercase text eyebrow (`letterSpacing: 2.2`, `fontSize: 12`, `color: #34D399`). This strictly adheres to the **Zero Decorative Badges / Pills** invariant.
+- **Brand Eyebrow Invariant (No Decorative Pill)**: Never wrap "UNISWAP" in a pill badge or container. Keep it as a pure, tracked-out, bold uppercase text eyebrow (`letterSpacing: 2.2`, `fontSize: 12`, `color: #34D399`). This strictly adheres to the **Zero Decorative Badges / Pills** invariant.
 - **Hero Cluster Visual Language Unification**: The 3-circle motif must share an identical visual language: crisp white glyphs (`#FFFFFF`), unified visual stroke weights, frosted dark emerald discs (`rgba(16, 185, 129, 0.16)`), and zero contrasting amber/yellow accents.
 - **CTA Hierarchy**: Use a vibrant emerald primary button paired with a sleek ghost button for secondary actions (`backgroundColor: 'transparent'`, `borderWidth: 1`, `borderColor: 'rgba(255, 255, 255, 0.15)'`) with accessible 48px+ mobile thumb touch targets.
 
@@ -475,7 +475,7 @@ This document captures project-specific design standards, user preferences, and 
 ### 35. Pure Relational Listing Ownership & In-Memory State Isolation Across Sessions
 - **Zero In-Memory Ownership Mutation**: Never stamp runtime flags like `(newItem as any).isOwner = true` onto item data models. Ownership is not an intrinsic property of a product; it is strictly a relational equality check between the active authenticated user and the item's creator (`currentUserId === item.sellerId || currentUserName.toLowerCase() === item.sellerName.toLowerCase()`).
 - **Zero `(item as any).isOwner === true` Bypass Checks**: Delete all fallback checks to `(item as any).isOwner === true` across `item/[id].tsx`, `payment/[id].tsx`, `item-card.tsx`, `chat/[id].tsx`, `profile.tsx`, and `marketplace.tsx`. These bypass checks cause items created in a previous session to falsely identify any subsequent logged-in user as the owner.
-- **Session Cleanup & Reactive Feed Synchronization**: On user sign-out in `profile.tsx`, reset local user states, clear `@campusgreen_user_profile`, and trigger `refreshItems()` on `ItemsContext`. In `marketplace.tsx`, trigger `refreshItems()` on screen focus (`useFocusEffect`) so switching accounts always loads clean, unpolluted data from Supabase.
+- **Session Cleanup & Reactive Feed Synchronization**: On user sign-out in `profile.tsx`, reset local user states, clear `@uniswap_user_profile`, and trigger `refreshItems()` on `ItemsContext`. In `marketplace.tsx`, trigger `refreshItems()` on screen focus (`useFocusEffect`) so switching accounts always loads clean, unpolluted data from Supabase.
 
 ### 36. Peer-to-Peer Chat Role Separation & Real-Time Timestamps
 - **Chat Access Invariant (Zero Owner Blocker in Chat Screen)**:
@@ -504,7 +504,7 @@ This document captures project-specific design standards, user preferences, and 
   - Both the chat inbox and chat thread must display the student's actual name, avatar, and year instead of a generic `"Campus Buyer"` placeholder.
 
 - **Application Identity & Icon Assets Configuration**:
-  - The official display name of the application is **`Campus Green`** (with a space), configured under `"expo": { "name": "Campus Green" }` in `app.json` and in `_layout.tsx` navigation headers.
+  - The official display name of the application is **`UniSwap`** (with a space), configured under `"expo": { "name": "UniSwap" }` in `app.json` and in `_layout.tsx` navigation headers.
   - The app icons are sourced from EasyAppIcon assets:
     - Master 1024x1024 icon: `assets/images/icon.png` (using `iTunesArtwork@2x.png`).
     - Android adaptive icon foreground: `assets/images/android-icon-foreground.png` (432x432).
@@ -591,7 +591,7 @@ This document captures project-specific design standards, user preferences, and 
   - Updaters are batched and scheduled asynchronously by the React runtime, leaving outer variables `null` and silently aborting downstream persistence calls.
   - Maintain a synchronized `conversationsRef` (`useRef(conversations)`) to compute updates deterministically, update state, and trigger async persistence (`saveChatConversationToSupabase` and `AsyncStorage`) reliably.
 - **Write-Through Local Caching for Chat Conversations**:
-  - Store chat conversations in `AsyncStorage` under `@campusgreen_chat_conversations`.
+  - Store chat conversations in `AsyncStorage` under `@uniswap_chat_conversations`.
   - Read from `AsyncStorage` on initial mount to provide instantaneous zero-latency rendering, followed by background Supabase synchronization.
   - Write through to both `AsyncStorage` and Supabase on every state change (`ensureConversation`, `updateAgreementStatus`, `submitPeerRating`) so conversation state and ratings survive app restarts and screen refocuses even during network latency.
 - **Safe Conversation Initialization (`ensureConversation` Guard)**:

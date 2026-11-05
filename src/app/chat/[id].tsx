@@ -117,7 +117,10 @@ export default function ChatScreen() {
   const [currentUser, setCurrentUser] = useState<{ id: string; fullName: string } | null>(null);
 
   const loadProfile = useCallback(() => {
-    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+    AsyncStorage.getItem('@uniswap_user_profile').then(async (str) => {
+      if (!str) {
+        str = await AsyncStorage.getItem('@campusgreen_user_profile');
+      }
       if (str) {
         try {
           const parsed = JSON.parse(str);
@@ -330,7 +333,7 @@ export default function ChatScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Photo Library Access Required',
-          'CampusGreen needs permission to access your photo library so you can send photos in chat.'
+          'UniSwap needs permission to access your photo library so you can send photos in chat.'
         );
         return;
       }
@@ -357,7 +360,7 @@ export default function ChatScreen() {
       if (status !== 'granted') {
         Alert.alert(
           'Camera Access Required',
-          'CampusGreen needs camera permission so you can take and send photos in chat.'
+          'UniSwap needs camera permission so you can take and send photos in chat.'
         );
         return;
       }

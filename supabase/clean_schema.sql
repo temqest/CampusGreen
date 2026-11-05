@@ -1,11 +1,11 @@
 -- ==============================================================================
--- CampusGreen: Clean Application Schema Data Script
+-- UniSwap: Clean Application Schema Data Script
 -- 
--- This script ONLY targets the 7 tables belonging exclusively to CampusGreen.
+-- This script ONLY targets the 7 tables belonging exclusively to UniSwap.
 -- It will NEVER drop or touch auth.users, storage.buckets, or other app schemas.
 -- ==============================================================================
 
--- Option 1: Clean out all CampusGreen test data (complete fresh start)
+-- Option 1: Clean out all UniSwap test data (complete fresh start)
 TRUNCATE TABLE
   public.chat_messages,
   public.chat_conversations,

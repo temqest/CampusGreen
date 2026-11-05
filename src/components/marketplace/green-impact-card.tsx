@@ -154,7 +154,7 @@ export function GreenImpactCard({ stats }: GreenImpactCardProps) {
 
             <View style={styles.modalContent}>
               <Text style={[styles.modalBody, { color: theme.textSecondary }]}>
-                Every textbook, uniform, and tool exchanged on CampusGreen prevents virgin manufacturing, packaging, and shipping footprint:
+                Every textbook, uniform, and tool exchanged on UniSwap prevents virgin manufacturing, packaging, and shipping footprint:
               </Text>
 
               <View style={styles.modalFactorList}>

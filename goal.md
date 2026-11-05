@@ -1,4 +1,4 @@
-# CampusGreen Connect: Goal
+# UniSwap: Goal
 
 ## Vision
 

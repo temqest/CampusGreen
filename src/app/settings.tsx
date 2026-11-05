@@ -118,7 +118,7 @@ export default function SettingsScreen() {
     async function loadActiveProfile() {
       try {
         let activeUserId = 'user_active_student';
-        const local = await AsyncStorage.getItem('@campusgreen_user_profile');
+        const local = (await AsyncStorage.getItem('@uniswap_user_profile')) || (await AsyncStorage.getItem('@campusgreen_user_profile'));
         if (local && isMounted) {
           const parsed = JSON.parse(local);
           if (parsed.id) {
@@ -266,7 +266,7 @@ export default function SettingsScreen() {
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
         try {
-          await AsyncStorage.removeItem('@campusgreen_user_profile');
+          await AsyncStorage.multiRemove(['@uniswap_user_profile', '@campusgreen_user_profile']);
           await supabase.auth.signOut().catch(() => {});
           await refreshItems().catch(() => {});
         } catch (e) {
@@ -638,7 +638,7 @@ export default function SettingsScreen() {
         {/* App Version Stamp */}
         <View style={styles.versionFooter}>
           <Text style={[styles.versionText, { color: theme.textMuted }]}>
-            CampusGreen • Ateneo de Naga University
+            UniSwap • Ateneo de Naga University
           </Text>
           <Text style={[styles.versionSubtext, { color: theme.textMuted }]}>
             Version 1.2.0 • Build 2026.11
@@ -1444,7 +1444,7 @@ export default function SettingsScreen() {
               <View>
                 <Text style={[styles.modalTitle, { color: theme.text }]}>App Appearance</Text>
                 <Text style={[styles.modalSub, { color: theme.textSecondary }]}>
-                  Choose how CampusGreen looks on this device
+                  Choose how UniSwap looks on this device
                 </Text>
               </View>
               <Pressable onPress={() => setIsAppearanceModalVisible(false)} style={styles.modalCloseBtn}>

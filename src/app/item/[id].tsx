@@ -48,7 +48,10 @@ export default function ItemDetailScreen() {
   const [offeredTradeItem, setOfferedTradeItem] = useState('');
 
   useEffect(() => {
-    AsyncStorage.getItem('@campusgreen_user_profile').then((str) => {
+    AsyncStorage.getItem('@uniswap_user_profile').then(async (str) => {
+      if (!str) {
+        str = await AsyncStorage.getItem('@campusgreen_user_profile');
+      }
       if (str) {
         try {
           const parsed = JSON.parse(str);
@@ -84,7 +87,7 @@ export default function ItemDetailScreen() {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `Check out "${item.title}" on CampusGreen Connect! Available at ${item.campus}.`,
+        message: `Check out "${item.title}" on UniSwap! Available at ${item.campus}.`,
       });
     } catch {
       // User dismissed share dialog
