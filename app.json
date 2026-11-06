@@ -12,6 +12,7 @@
     },
     "android": {
       "package": "com.uniswap.app",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#328c5a",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

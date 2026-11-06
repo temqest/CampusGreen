@@ -321,7 +321,7 @@ export default function SellScreen() {
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <KeyboardAvoidingView
         style={styles.keyboardView}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}>
         <ScrollView
           ref={scrollViewRef}

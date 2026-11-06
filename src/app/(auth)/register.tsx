@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -24,6 +24,7 @@ export default function RegisterScreen() {
   const theme = useTheme();
   const colorScheme = useColorScheme();
   const router = useRouter();
+  const scrollRef = useRef<React.ElementRef<typeof ScrollView>>(null);
 
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -98,10 +99,11 @@ export default function RegisterScreen() {
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
         style={styles.keyboardView}>
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled">
@@ -230,6 +232,11 @@ export default function RegisterScreen() {
                     setPassword(val);
                     if (errorMessage) setErrorMessage('');
                   }}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      scrollRef.current?.scrollToEnd({ animated: true });
+                    }, 120);
+                  }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -275,6 +282,11 @@ export default function RegisterScreen() {
                   onChangeText={(val) => {
                     setConfirmPassword(val);
                     if (errorMessage) setErrorMessage('');
+                  }}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      scrollRef.current?.scrollToEnd({ animated: true });
+                    }, 120);
                   }}
                   secureTextEntry={!showPassword}
                   autoCapitalize="none"
@@ -338,7 +350,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     paddingHorizontal: Spacing.five,
     paddingTop: Spacing.two,
-    paddingBottom: Spacing.six,
+    paddingBottom: Platform.OS === 'android' ? 80 : Spacing.six,
   },
 
   /* Top Navigation */

@@ -627,3 +627,16 @@ This document captures project-specific design standards, user preferences, and 
   - All messages in `chat_messages` must record `conversation_id`, and queries must filter by `conversation_id` so messages between Seller S and Buyer 1 are never exposed to Buyer 2.
 - **Defense-in-Depth Feed Filtering**:
   - In both the database query and the UI render feed (`(tabs)/chat.tsx`), filter conversations strictly: `c.buyerId === currentId || c.userId === currentId || c.sellerId === currentId`. Conversations belonging to other students must never render in the inbox.
+
+---
+
+### 33. Android Standalone APK Software Keyboard & Input Avoidance Invariants
+- **Never Leave `behavior` Undefined on Android (`Platform.OS === 'ios' ? 'padding' : 'height'`)**:
+  - On older tutorials, leaving `behavior={Platform.OS === 'ios' ? 'padding' : undefined}` was common because legacy Android handled window resizing automatically.
+  - On modern Android (API 29+) with edge-to-edge / transparent status and navigation bars, the Android Window Manager fails to resize the decor frame under `adjustResize`. Leaving `behavior` as `undefined` makes `KeyboardAvoidingView` inert, causing the popup keyboard to overlay and trap lower inputs (e.g. `Confirm Password`).
+  - Always use `behavior={Platform.OS === 'ios' ? 'padding' : 'height'}` across all form containers.
+- **Explicit `softwareKeyboardLayoutMode` in `app.json`**:
+  - Always configure `"softwareKeyboardLayoutMode": "resize"` explicitly under `"android"` in `app.json`.
+- **Generous Bottom Clearance & Auto-Scroll on Focus**:
+  - Set `paddingBottom: Platform.OS === 'android' ? 80 : Spacing.six` on `ScrollView.contentContainerStyle` so the scroll container has ample runway.
+  - On lower form fields like `Confirm Password` and `Password`, attach `onFocus` handlers with `scrollRef.current?.scrollToEnd({ animated: true })` using typed `useRef<React.ElementRef<typeof ScrollView>>(null)` so the screen smoothly scrolls the active input above the keyboard on tap.
