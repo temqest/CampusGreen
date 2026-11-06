@@ -48,6 +48,8 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "build:apk:release": "cd android && gradlew assembleRelease",
+    "build:apk:eas": "eas build --platform android --profile preview",
     "db:clean": "node ./scripts/clean-supabase.js",
     "db:clean:keep-profiles": "node ./scripts/clean-supabase.js --keep-profiles",
     "db:clean:keep-items": "node ./scripts/clean-supabase.js --keep-items",
