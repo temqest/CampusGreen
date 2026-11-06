@@ -47,6 +47,7 @@ const RATING_TAG_OPTIONS = [
 export default function ChatScreen() {
   const {
     id,
+    conversationId: paramConversationId,
     sellerName: paramSellerName,
     buyerName: paramBuyerName,
     buyerAvatarUri: paramBuyerAvatarUri,
@@ -62,6 +63,7 @@ export default function ChatScreen() {
     sellerRating: paramSellerRating,
   } = useLocalSearchParams<{
     id: string;
+    conversationId?: string;
     sellerName?: string;
     buyerName?: string;
     buyerAvatarUri?: string;
@@ -143,9 +145,18 @@ export default function ChatScreen() {
     }, [loadProfile])
   );
 
+  const activeUserId = currentUser?.id || 'user_active_student';
+
   const matchedConv = useMemo(
-    () => conversations.find((c) => c.itemId === id),
-    [conversations, id]
+    () =>
+      (paramConversationId && conversations.find((c) => c.id === paramConversationId)) ||
+      conversations.find(
+        (c) =>
+          c.itemId === id &&
+          (c.buyerId === activeUserId || c.userId === activeUserId || c.sellerId === activeUserId)
+      ) ||
+      conversations.find((c) => c.itemId === id),
+    [conversations, id, paramConversationId, activeUserId]
   );
 
   const {
@@ -218,8 +229,9 @@ export default function ChatScreen() {
     matchedConv,
   ]);
 
-  const messages = getMessages(id, item);
-  const isTyping = isTypingByItemId[id] || false;
+  const currentConvId = paramConversationId || matchedConv?.id || `conv-${id}-${activeUserId}`;
+  const messages = getMessages(id, item, currentConvId);
+  const isTyping = (currentConvId && isTypingByItemId[currentConvId]) || isTypingByItemId[id] || false;
 
   // Interactive Agreement State (Permanently synchronized from persistent conversation)
   const agreementStatus: AgreementStatus = useMemo(() => {
@@ -408,7 +420,8 @@ export default function ChatScreen() {
         text: text || undefined,
         imageUri: finalImageUri,
       },
-      item
+      item,
+      currentConvId
     );
     setInputMessage('');
     setPendingImageUri(null);

@@ -21,6 +21,7 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { useThemeContext } from '@/context/theme-context';
 import { useItems } from '@/context/items-context';
+import { useChat } from '@/context/chat-context';
 import { EscrowTransaction } from '@/types/item';
 import { supabase } from '@/lib/supabase';
 import { fetchProfileFromSupabase, saveProfileToSupabase } from '@/lib/database';
@@ -43,6 +44,7 @@ export default function SettingsScreen() {
     cancelSubscription,
     refreshItems,
   } = useItems();
+  const { clearChatData } = useChat();
 
   // Student Profile state for saving preferences
   const [profileId, setProfileId] = useState<string>('user_active_student');
@@ -266,7 +268,14 @@ export default function SettingsScreen() {
       onConfirm: async () => {
         setConfirmConfig((prev) => ({ ...prev, visible: false }));
         try {
-          await AsyncStorage.multiRemove(['@uniswap_user_profile', '@campusgreen_user_profile']);
+          await clearChatData();
+          await AsyncStorage.multiRemove([
+            '@uniswap_user_profile',
+            '@campusgreen_user_profile',
+            '@uniswap_chat_conversations',
+            '@campusgreen_chat_conversations',
+            `@uniswap_chat_conversations_${profileId}`,
+          ]);
           await supabase.auth.signOut().catch(() => {});
           await refreshItems().catch(() => {});
         } catch (e) {

@@ -13,10 +13,11 @@ import {
   saveChatConversationToSupabase,
   saveChatMessageToSupabase,
 } from '@/lib/database';
+import { supabase } from '@/lib/supabase';
 import { formatConversationTime, formatMessageTime } from '@/utils/format-time';
 
-const CHAT_CONVERSATIONS_KEY = '@uniswap_chat_conversations';
-const LEGACY_CHAT_KEY = '@campusgreen_chat_conversations';
+const getUserChatKey = (userId: string) => `@uniswap_chat_conversations_${userId}`;
+const LEGACY_CHAT_KEYS = ['@uniswap_chat_conversations', '@campusgreen_chat_conversations'];
 const USER_PROFILE_KEY = '@uniswap_user_profile';
 const LEGACY_PROFILE_KEY = '@campusgreen_user_profile';
 
@@ -26,14 +27,21 @@ async function getStoredUserProfile(): Promise<string | null> {
   return AsyncStorage.getItem(LEGACY_PROFILE_KEY);
 }
 
-async function getStoredConversations(): Promise<string | null> {
-  const current = await AsyncStorage.getItem(CHAT_CONVERSATIONS_KEY);
-  if (current) return current;
-  return AsyncStorage.getItem(LEGACY_CHAT_KEY);
+async function getStoredConversationsForUser(userId: string): Promise<ChatConversation[]> {
+  if (!userId || userId === 'user_active_student') return [];
+  try {
+    const raw = await AsyncStorage.getItem(getUserChatKey(userId));
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
 }
 
-function persistLocalConversations(list: ChatConversation[]) {
-  AsyncStorage.setItem(CHAT_CONVERSATIONS_KEY, JSON.stringify(list)).catch(() => {});
+function persistConversationsForUser(userId: string, list: ChatConversation[]) {
+  if (!userId || userId === 'user_active_student') return;
+  AsyncStorage.setItem(getUserChatKey(userId), JSON.stringify(list)).catch(() => {});
 }
 
 export interface Message {
@@ -82,13 +90,14 @@ export interface ChatConversation {
 interface ChatContextType {
   conversations: ChatConversation[];
   isLoading: boolean;
-  getMessages: (itemId: string, itemMeta?: Partial<MarketplaceItem>) => Message[];
+  getMessages: (itemId: string, itemMeta?: Partial<MarketplaceItem>, conversationId?: string) => Message[];
   sendMessage: (
     itemId: string,
     content: string | { text?: string; imageUri?: string },
-    itemMeta?: Partial<MarketplaceItem>
+    itemMeta?: Partial<MarketplaceItem>,
+    conversationId?: string
   ) => void;
-  addSystemMessage: (itemId: string, text: string) => void;
+  addSystemMessage: (itemId: string, text: string, conversationId?: string) => void;
   ensureConversation: (item: MarketplaceItem, extra?: Partial<ChatConversation>) => ChatConversation;
   updateAgreementStatus: (
     itemId: string,
@@ -105,6 +114,7 @@ interface ChatContextType {
   isTypingByItemId: Record<string, boolean>;
   markAsRead: (itemId: string) => void;
   refreshConversations: () => Promise<void>;
+  clearChatData: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -122,11 +132,34 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     conversationsRef.current = conversations;
   }, [conversations]);
 
+  const clearChatData = useCallback(async () => {
+    setConversations([]);
+    conversationsRef.current = [];
+    setMessagesByItemId({});
+    setIsTypingByItemId({});
+    setCurrentUser(null);
+    try {
+      const keysToRemove = [...LEGACY_CHAT_KEYS];
+      const stored = await getStoredUserProfile();
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.id) {
+            keysToRemove.push(getUserChatKey(parsed.id));
+          }
+        } catch {}
+      }
+      await AsyncStorage.multiRemove(keysToRemove);
+    } catch (err) {
+      console.warn('Error clearing local chat data:', err);
+    }
+  }, []);
+
   const refreshConversations = useCallback(async () => {
     setIsLoading(true);
     try {
       let sellerName = '';
-      let activeUserId = 'user_active_student';
+      let activeUserId = '';
       try {
         const stored = await getStoredUserProfile();
         if (stored) {
@@ -140,35 +173,39 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
       } catch {}
 
-      const liveConvs = await fetchChatConversationsFromSupabase(activeUserId, sellerName);
-      if (liveConvs && liveConvs.length > 0) {
-        setConversations(liveConvs);
-        conversationsRef.current = liveConvs;
-        persistLocalConversations(liveConvs);
-      } else {
-        const cached = await getStoredConversations();
-        if (cached) {
-          try {
-            const parsedCached = JSON.parse(cached);
-            if (Array.isArray(parsedCached) && parsedCached.length > 0) {
-              setConversations(parsedCached);
-              conversationsRef.current = parsedCached;
-            }
-          } catch {}
-        }
+      if (!activeUserId) {
+        setConversations([]);
+        conversationsRef.current = [];
+        return;
       }
+
+      const liveConvs = await fetchChatConversationsFromSupabase(activeUserId, sellerName);
+      const filtered = (liveConvs || []).filter(
+        (c) =>
+          c.buyerId === activeUserId ||
+          c.userId === activeUserId ||
+          c.sellerId === activeUserId ||
+          (sellerName &&
+            sellerName.toLowerCase() !== 'campus student' &&
+            c.sellerName?.trim().toLowerCase() === sellerName.toLowerCase())
+      );
+
+      setConversations(filtered);
+      conversationsRef.current = filtered;
+      persistConversationsForUser(activeUserId, filtered);
     } catch (err) {
       console.warn('Error refreshing conversations:', err);
-      const cached = await getStoredConversations();
-      if (cached) {
-        try {
-          const parsedCached = JSON.parse(cached);
-          if (Array.isArray(parsedCached) && parsedCached.length > 0) {
-            setConversations(parsedCached);
-            conversationsRef.current = parsedCached;
+      try {
+        const stored = await getStoredUserProfile();
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed.id) {
+            const cached = await getStoredConversationsForUser(parsed.id);
+            setConversations(cached);
+            conversationsRef.current = cached;
           }
-        } catch {}
-      }
+        }
+      } catch {}
     } finally {
       setIsLoading(false);
     }
@@ -177,46 +214,53 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let isMounted = true;
 
-    // Fast-path: load cached conversations from AsyncStorage first
-    getStoredConversations()
-      .then((cached) => {
-        if (isMounted && cached) {
-          try {
-            const parsed = JSON.parse(cached);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-              setConversations(parsed);
-              conversationsRef.current = parsed;
-              setIsLoading(false);
-            }
-          } catch {}
-        }
-      })
-      .catch(() => {});
-
     getStoredUserProfile()
-      .then((stored) => {
-        let sellerName = '';
-        let activeUserId = 'user_active_student';
-        if (stored) {
-          try {
-            const parsed = JSON.parse(stored);
-            if (parsed.fullName) sellerName = parsed.fullName.trim();
-            if (parsed.id) activeUserId = parsed.id;
-            if (isMounted) {
-              setCurrentUser({
-                id: activeUserId,
-                fullName: sellerName,
-              });
-            }
-          } catch {}
+      .then(async (stored) => {
+        if (!stored || !isMounted) {
+          setIsLoading(false);
+          return;
         }
-        return fetchChatConversationsFromSupabase(activeUserId, sellerName);
-      })
-      .then((convs) => {
-        if (isMounted && convs && convs.length > 0) {
-          setConversations(convs);
-          conversationsRef.current = convs;
-          persistLocalConversations(convs);
+        let sellerName = '';
+        let activeUserId = '';
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.fullName) sellerName = parsed.fullName.trim();
+          if (parsed.id) activeUserId = parsed.id;
+          if (isMounted) {
+            setCurrentUser({
+              id: activeUserId,
+              fullName: sellerName,
+            });
+          }
+        } catch {}
+
+        if (!activeUserId) {
+          if (isMounted) setIsLoading(false);
+          return;
+        }
+
+        // Fast-path user-scoped cache
+        const cached = await getStoredConversationsForUser(activeUserId);
+        if (isMounted && cached.length > 0) {
+          setConversations(cached);
+          conversationsRef.current = cached;
+          setIsLoading(false);
+        }
+
+        const convs = await fetchChatConversationsFromSupabase(activeUserId, sellerName);
+        if (isMounted) {
+          const filtered = (convs || []).filter(
+            (c) =>
+              c.buyerId === activeUserId ||
+              c.userId === activeUserId ||
+              c.sellerId === activeUserId ||
+              (sellerName &&
+                sellerName.toLowerCase() !== 'campus student' &&
+                c.sellerName?.trim().toLowerCase() === sellerName.toLowerCase())
+          );
+          setConversations(filtered);
+          conversationsRef.current = filtered;
+          persistConversationsForUser(activeUserId, filtered);
         }
       })
       .catch((err) => {
@@ -231,18 +275,33 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event) => {
+      if (event === 'SIGNED_OUT') {
+        await clearChatData();
+      } else if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+        await refreshConversations();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [clearChatData, refreshConversations]);
+
   const getMessages = useCallback(
-    (itemId: string, itemMeta?: Partial<MarketplaceItem>): Message[] => {
-      if (messagesByItemId[itemId]) {
-        return messagesByItemId[itemId];
+    (itemId: string, itemMeta?: Partial<MarketplaceItem>, conversationId?: string): Message[] => {
+      const cacheKey = conversationId || itemId;
+      if (messagesByItemId[cacheKey]) {
+        return messagesByItemId[cacheKey];
       }
 
       // Check Supabase in background
-      fetchChatMessagesFromSupabase(itemId).then((dbMsgs) => {
+      fetchChatMessagesFromSupabase(itemId, conversationId).then((dbMsgs) => {
         if (dbMsgs && dbMsgs.length > 0) {
           setMessagesByItemId((prev) => ({
             ...prev,
-            [itemId]: dbMsgs,
+            [cacheKey]: dbMsgs,
           }));
         }
       });
@@ -251,7 +310,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const spot = itemMeta?.safeMeetupSpot || 'the designated campus zone';
 
       const initialGreeting: Message = {
-        id: `init-${itemId}`,
+        id: `init-${cacheKey}`,
         sender: 'seller',
         text:
           itemMeta?.tradeType === 'swap'
@@ -273,8 +332,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
-  const addSystemMessage = useCallback((itemId: string, text: string) => {
+  const addSystemMessage = useCallback((itemId: string, text: string, conversationId?: string) => {
     const formattedNow = formatMessageTime(new Date());
+    const cacheKey = conversationId || itemId;
     const sysMsg: Message = {
       id: `sys-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       sender: 'system',
@@ -283,16 +343,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     };
 
     setMessagesByItemId((prev) => {
-      const current = prev[itemId] || [];
+      const current = prev[cacheKey] || [];
       return {
         ...prev,
-        [itemId]: [...current, sysMsg],
+        [cacheKey]: [...current, sysMsg],
       };
     });
 
     saveChatMessageToSupabase({
       id: sysMsg.id,
       itemId,
+      conversationId,
       sender: 'system',
       text,
       timestamp: formattedNow,
@@ -301,15 +362,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const ensureConversation = useCallback(
     (item: MarketplaceItem, extra?: Partial<ChatConversation>): ChatConversation => {
-      const existing = conversationsRef.current.find((c) => c.itemId === item.id);
+      const activeUserId = currentUser?.id || 'user_active_student';
+      const targetConvId = extra?.id || `conv-${item.id}-${activeUserId}`;
+
+      const existing = conversationsRef.current.find(
+        (c) =>
+          c.id === targetConvId ||
+          (c.itemId === item.id && (c.buyerId === activeUserId || c.userId === activeUserId))
+      );
       if (existing) {
         if (extra && Object.keys(extra).length > 0) {
           const merged: ChatConversation = { ...existing, ...extra };
-          setConversations((prev) => [merged, ...prev.filter((c) => c.itemId !== item.id)]);
-          const nextList = [merged, ...conversationsRef.current.filter((c) => c.itemId !== item.id)];
+          setConversations((prev) => [merged, ...prev.filter((c) => c.id !== existing.id)]);
+          const nextList = [merged, ...conversationsRef.current.filter((c) => c.id !== existing.id)];
           conversationsRef.current = nextList;
-          persistLocalConversations(nextList);
-          saveChatConversationToSupabase(merged, merged.userId || 'user_active_student').catch((err) =>
+          if (currentUser?.id) persistConversationsForUser(currentUser.id, nextList);
+          saveChatConversationToSupabase(merged, activeUserId).catch((err) =>
             console.warn('Supabase save merged conversation error:', err)
           );
           return merged;
@@ -317,7 +385,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         return existing;
       }
 
-      const conversationId = `conv-${item.id}`;
       const initialGreeting =
         item.tradeType === 'swap'
           ? `Hi! Thanks for your interest in swapping for my ${item.title}. What gear or item are you proposing to trade?`
@@ -326,10 +393,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           : `Hi! Thanks for checking out the ${item.title}. It's still available for meetup at ${item.safeMeetupSpot}. Feel free to ask any questions!`;
 
       const newConv: ChatConversation = {
-        id: conversationId,
+        id: targetConvId,
         itemId: item.id,
-        userId: currentUser?.id || 'user_active_student',
-        buyerId: currentUser?.id || 'user_active_student',
+        userId: activeUserId,
+        buyerId: activeUserId,
         buyerName: currentUser?.fullName || 'Campus Student',
         sellerId: item.sellerId,
         sellerName: item.sellerName || 'Campus Student',
@@ -347,12 +414,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ...extra,
       };
 
-      setConversations((prev) => [newConv, ...prev.filter((c) => c.itemId !== item.id)]);
-      const nextList = [newConv, ...conversationsRef.current.filter((c) => c.itemId !== item.id)];
+      setConversations((prev) => [newConv, ...prev.filter((c) => c.id !== targetConvId)]);
+      const nextList = [newConv, ...conversationsRef.current.filter((c) => c.id !== targetConvId)];
       conversationsRef.current = nextList;
-      persistLocalConversations(nextList);
+      if (currentUser?.id) persistConversationsForUser(currentUser.id, nextList);
 
-      saveChatConversationToSupabase(newConv, newConv.userId || 'user_active_student').catch((err) =>
+      saveChatConversationToSupabase(newConv, activeUserId).catch((err) =>
         console.warn('Supabase save auto-generated conversation error:', err)
       );
 
@@ -367,7 +434,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       status: 'pending' | 'accepted' | 'completed' | 'cancelled',
       extra?: Partial<ChatConversation>
     ) => {
-      const existing = conversationsRef.current.find((c) => c.itemId === itemId);
+      const existing = conversationsRef.current.find(
+        (c) => (extra?.id && c.id === extra.id) || c.itemId === itemId
+      );
       if (!existing) return;
       const updated: ChatConversation = {
         ...existing,
@@ -375,17 +444,17 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ...extra,
       };
 
-      setConversations((prev) => [updated, ...prev.filter((c) => c.itemId !== itemId)]);
-      const nextList = [updated, ...conversationsRef.current.filter((c) => c.itemId !== itemId)];
+      setConversations((prev) => [updated, ...prev.filter((c) => c.id !== existing.id)]);
+      const nextList = [updated, ...conversationsRef.current.filter((c) => c.id !== existing.id)];
       conversationsRef.current = nextList;
-      persistLocalConversations(nextList);
+      if (currentUser?.id) persistConversationsForUser(currentUser.id, nextList);
 
       await saveChatConversationToSupabase(
         updated,
-        updated.userId || 'user_active_student'
+        updated.userId || currentUser?.id || 'user_active_student'
       ).catch((err) => console.warn('Supabase save agreement status error:', err));
     },
-    []
+    [currentUser]
   );
 
   const submitPeerRating = useCallback(
@@ -414,24 +483,25 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ...ratingUpdates,
       };
 
-      setConversations((prev) => [updated, ...prev.filter((c) => c.itemId !== itemId)]);
-      const nextList = [updated, ...conversationsRef.current.filter((c) => c.itemId !== itemId)];
+      setConversations((prev) => [updated, ...prev.filter((c) => c.id !== existing.id)]);
+      const nextList = [updated, ...conversationsRef.current.filter((c) => c.id !== existing.id)];
       conversationsRef.current = nextList;
-      persistLocalConversations(nextList);
+      if (currentUser?.id) persistConversationsForUser(currentUser.id, nextList);
 
       await saveChatConversationToSupabase(
         updated,
-        updated.userId || 'user_active_student'
+        updated.userId || currentUser?.id || 'user_active_student'
       ).catch((err) => console.warn('Supabase save peer rating error:', err));
     },
-    []
+    [currentUser]
   );
 
   const sendMessage = useCallback(
     (
       itemId: string,
       content: string | { text?: string; imageUri?: string },
-      itemMeta?: Partial<MarketplaceItem>
+      itemMeta?: Partial<MarketplaceItem>,
+      conversationId?: string
     ) => {
       let trimmed = '';
       let imageUri: string | undefined;
@@ -471,11 +541,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
       };
 
+      const activeUserId = currentUser?.id || 'user_active_student';
+      const existingConv = conversationsRef.current.find(
+        (c) =>
+          (conversationId && c.id === conversationId) ||
+          (c.itemId === itemId &&
+            (c.buyerId === activeUserId || c.userId === activeUserId || c.sellerId === activeUserId))
+      );
+      const resolvedConvId = conversationId || existingConv?.id || `conv-${itemId}-${activeUserId}`;
+      const cacheKey = resolvedConvId;
+
       // 1. Update messages immediately in local state
       setMessagesByItemId((prev) => {
-        const existing = prev[itemId] || getMessages(itemId, itemMeta);
+        const existing = prev[cacheKey] || prev[itemId] || getMessages(itemId, itemMeta, resolvedConvId);
         return {
           ...prev,
+          [cacheKey]: [...existing, userMsg],
           [itemId]: [...existing, userMsg],
         };
       });
@@ -484,6 +565,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       saveChatMessageToSupabase({
         id: userMsg.id,
         itemId,
+        conversationId: resolvedConvId,
         sender: senderRole,
         text: userMsg.text,
         imageUri: userMsg.imageUri,
@@ -491,72 +573,64 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }).catch((err) => console.warn('Supabase save user message error:', err));
 
       // 3. Update / bump conversation in the inbox list
-      const conversationId = `conv-${itemId}`;
       let finalConvToPersist: ChatConversation | null = null;
 
       setConversations((prev) => {
-        const existingConv = prev.find((c) => c.itemId === itemId);
+        const found = prev.find((c) => c.id === resolvedConvId) || prev.find((c) => c.itemId === itemId);
         const mergedConv: ChatConversation = {
-          id: conversationId,
+          id: resolvedConvId,
           itemId,
           userId: isSeller
-            ? ((itemMeta as any)?.buyerId || existingConv?.userId)
-            : (currentUser?.id || existingConv?.userId || 'user_active_student'),
+            ? ((itemMeta as any)?.buyerId || found?.userId || found?.buyerId || 'user_active_student')
+            : (activeUserId || found?.userId || 'user_active_student'),
+          buyerId: isSeller
+            ? ((itemMeta as any)?.buyerId || found?.buyerId || found?.userId || 'user_active_student')
+            : (activeUserId || found?.buyerId || 'user_active_student'),
           buyerName: isSeller
-            ? ((itemMeta as any)?.buyerName || existingConv?.buyerName)
-            : (currentUser?.fullName || existingConv?.buyerName),
-          buyerAvatarUri: (itemMeta as any)?.buyerAvatarUri || existingConv?.buyerAvatarUri,
-          buyerYear: (itemMeta as any)?.buyerYear || existingConv?.buyerYear,
-          sellerId: itemMeta?.sellerId || existingConv?.sellerId,
-          sellerName: itemMeta?.sellerName || existingConv?.sellerName || 'Campus Student',
-          sellerYear: itemMeta?.sellerYear || existingConv?.sellerYear || 'Verified Student',
-          itemTitle: itemMeta?.title || existingConv?.itemTitle || 'Marketplace Item',
-          price: itemMeta?.price ?? existingConv?.price ?? null,
-          tradeType: itemMeta?.tradeType || existingConv?.tradeType || 'buy',
+            ? ((itemMeta as any)?.buyerName || found?.buyerName)
+            : (currentUser?.fullName || found?.buyerName),
+          buyerAvatarUri: (itemMeta as any)?.buyerAvatarUri || found?.buyerAvatarUri,
+          buyerYear: (itemMeta as any)?.buyerYear || found?.buyerYear,
+          sellerId: itemMeta?.sellerId || found?.sellerId,
+          sellerName: itemMeta?.sellerName || found?.sellerName || 'Campus Student',
+          sellerYear: itemMeta?.sellerYear || found?.sellerYear || 'Verified Student',
+          itemTitle: itemMeta?.title || found?.itemTitle || 'Marketplace Item',
+          price: itemMeta?.price ?? found?.price ?? null,
+          tradeType: itemMeta?.tradeType || found?.tradeType || 'buy',
           lastMessage: previewText,
           timestamp: convTimestamp,
           unreadCount: 0,
-          safeMeetupSpot: itemMeta?.safeMeetupSpot || existingConv?.safeMeetupSpot || 'Main Library Ground Floor',
-          sellerAvatarUri: itemMeta?.sellerAvatarUri || existingConv?.sellerAvatarUri,
-          agreementStatus: existingConv?.agreementStatus || 'pending',
-          orderId: existingConv?.orderId,
-          escrowStatus: existingConv?.escrowStatus || 'none',
-          referenceCode: existingConv?.referenceCode,
-          buyerConfirmedAt: existingConv?.buyerConfirmedAt,
-          sellerConfirmedAt: existingConv?.sellerConfirmedAt,
-          buyerRating: existingConv?.buyerRating,
-          buyerRatingTags: existingConv?.buyerRatingTags,
-          buyerRatingComment: existingConv?.buyerRatingComment,
-          sellerRating: existingConv?.sellerRating,
-          sellerRatingTags: existingConv?.sellerRatingTags,
-          sellerRatingComment: existingConv?.sellerRatingComment,
+          safeMeetupSpot: itemMeta?.safeMeetupSpot || found?.safeMeetupSpot || 'Main Library Ground Floor',
+          sellerAvatarUri: itemMeta?.sellerAvatarUri || found?.sellerAvatarUri,
+          agreementStatus: found?.agreementStatus || 'pending',
+          orderId: found?.orderId,
+          escrowStatus: found?.escrowStatus || 'none',
+          referenceCode: found?.referenceCode,
+          buyerConfirmedAt: found?.buyerConfirmedAt,
+          sellerConfirmedAt: found?.sellerConfirmedAt,
+          buyerRating: found?.buyerRating,
+          buyerRatingTags: found?.buyerRatingTags,
+          buyerRatingComment: found?.buyerRatingComment,
+          sellerRating: found?.sellerRating,
+          sellerRatingTags: found?.sellerRatingTags,
+          sellerRatingComment: found?.sellerRatingComment,
         };
         finalConvToPersist = mergedConv;
-        const rest = prev.filter((c) => c.itemId !== itemId);
-        return [mergedConv, ...rest];
+        const rest = prev.filter((c) => c.id !== resolvedConvId && c.itemId !== itemId);
+        const updatedList = [mergedConv, ...rest];
+        conversationsRef.current = updatedList;
+        if (currentUser?.id) persistConversationsForUser(currentUser.id, updatedList);
+        return updatedList;
       });
 
       // Persist conversation to Supabase with the active user's ID
-      getStoredUserProfile()
-        .then((stored) => {
-          let activeUserId = 'user_active_student';
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored);
-              if (parsed.id) activeUserId = parsed.id;
-            } catch {}
-          }
-          if (finalConvToPersist) {
-            return saveChatConversationToSupabase(finalConvToPersist, activeUserId);
-          }
-        })
-        .catch((err) =>
+      if (finalConvToPersist) {
+        saveChatConversationToSupabase(finalConvToPersist, activeUserId).catch((err) =>
           console.warn('Supabase save conversation error:', err)
         );
+      }
 
-      // 4. Determine if the seller is an actual human user
-      // If the item belongs to an actual user (created via sell tab or has sellerId or matches active profile),
-      // DO NOT auto-reply. Auto-reply is strictly reserved for the automated demo/mock student catalogue.
+      // 4. Handle Mock Catalogue Auto-reply if applicable
       getStoredUserProfile()
         .then((storedProfile) => {
           let currentUserId = '';
@@ -574,26 +648,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             (currentUserName && itemMeta?.sellerName && itemMeta.sellerName.trim().toLowerCase() === currentUserName)
           );
 
-          if (isUserOwned) {
-            // Own listing - no auto-reply
-            return;
-          }
+          if (isUserOwned) return;
 
-          // If the item was created by another real student (e.g. ID starts with item_ or sellerId starts with user_),
-          // do NOT auto reply as well! Let the real user respond.
           const isRealOtherUserListing =
             itemId.startsWith('item_') ||
             (!!itemMeta?.sellerId && itemMeta.sellerId.startsWith('user_'));
 
-          if (isRealOtherUserListing) {
-            return;
-          }
+          if (isRealOtherUserListing) return;
 
-          // Show typing indicator and simulate realistic peer response ONLY for mock catalogue items
-          setIsTypingByItemId((prev) => ({ ...prev, [itemId]: true }));
+          // Show typing indicator and simulate response ONLY for mock demo catalogue items
+          setIsTypingByItemId((prev) => ({ ...prev, [itemId]: true, [resolvedConvId]: true }));
 
           setTimeout(() => {
-            setIsTypingByItemId((prev) => ({ ...prev, [itemId]: false }));
+            setIsTypingByItemId((prev) => ({ ...prev, [itemId]: false, [resolvedConvId]: false }));
 
             const lower = trimmed.toLowerCase();
             const spot = itemMeta?.safeMeetupSpot || 'the safe meetup zone';
@@ -649,9 +716,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             };
 
             setMessagesByItemId((prev) => {
-              const current = prev[itemId] || [];
+              const current = prev[cacheKey] || prev[itemId] || [];
               return {
                 ...prev,
+                [cacheKey]: [...current, peerMsg],
                 [itemId]: [...current, peerMsg],
               };
             });
@@ -659,25 +727,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             saveChatMessageToSupabase({
               id: peerMsg.id,
               itemId,
+              conversationId: resolvedConvId,
               sender: 'seller',
               text: reply,
               timestamp: peerMsgTimestamp,
             }).catch((err) => console.warn('Supabase save peer message error:', err));
 
-            // Update conversation with peer's reply
             setConversations((prev) => {
-              const base = prev.find((c) => c.itemId === itemId);
+              const base = prev.find((c) => c.id === resolvedConvId) || prev.find((c) => c.itemId === itemId);
               if (!base) return prev;
               const replyConv: ChatConversation = {
                 ...base,
                 lastMessage: reply,
                 timestamp: peerConvTimestamp,
               };
-              saveChatConversationToSupabase(replyConv).catch((err) =>
+              saveChatConversationToSupabase(replyConv, activeUserId).catch((err) =>
                 console.warn('Supabase save reply conversation error:', err)
               );
-              const rest = prev.filter((c) => c.itemId !== itemId);
-              return [replyConv, ...rest];
+              const rest = prev.filter((c) => c.id !== resolvedConvId && c.itemId !== itemId);
+              const updatedList = [replyConv, ...rest];
+              conversationsRef.current = updatedList;
+              if (currentUser?.id) persistConversationsForUser(currentUser.id, updatedList);
+              return updatedList;
             });
           }, 900);
         })
@@ -700,6 +771,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         isTypingByItemId,
         markAsRead,
         refreshConversations,
+        clearChatData,
       }}>
       {children}
     </ChatContext.Provider>

@@ -388,11 +388,17 @@ export default function PaymentScreen() {
                 opacity: pressed ? 0.88 : 1,
               },
             ]}
-            onPress={() =>
+            onPress={() => {
+              const conv = ensureConversation(item, {
+                agreementStatus: 'accepted',
+                escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
+                referenceCode: referenceCode || undefined,
+              });
               router.replace({
                 pathname: '/chat/[id]',
                 params: {
                   id: item.id,
+                  conversationId: conv.id,
                   sellerName: item.sellerName,
                   sellerAvatarUri: item.sellerAvatarUri || undefined,
                   itemTitle: item.title,
@@ -401,8 +407,8 @@ export default function PaymentScreen() {
                   escrowStatus: selectedMethod === 'cod' ? 'cod_pending' : 'in_escrow',
                   referenceCode: referenceCode || undefined,
                 },
-              })
-            }>
+              });
+            }}>
             <Ionicons name="chatbubbles" size={18} color="#FFFFFF" />
             <Text style={[styles.primaryBtnText, { color: '#FFFFFF' }]}>
               Message {item.sellerName} on Chat

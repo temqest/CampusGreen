@@ -288,14 +288,27 @@ export async function fetchChatConversationsFromSupabase(
   userId: string = 'user_active_student',
   sellerName?: string
 ) {
+  let activeId = userId;
+  if (!activeId || activeId === 'user_active_student') {
+    const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: null }));
+    if (sessionData?.session?.user?.id) {
+      activeId = sessionData.session.user.id;
+    }
+  }
+
   let query = supabase.from('chat_conversations').select('*');
 
-  if (sellerName) {
-    // If a seller name is provided, return conversations where the user is buyer OR seller
-    query = query.or(`user_id.eq.${userId},seller_name.ilike.%${sellerName}%`);
-  } else {
-    query = query.eq('user_id', userId);
+  // Filter conversations where active student is either the buyer (user_id/buyer_id) or the seller (seller_id)
+  const conditions = [`user_id.eq.${activeId}`, `buyer_id.eq.${activeId}`, `seller_id.eq.${activeId}`];
+  const trimmedSeller = sellerName?.trim();
+  if (
+    trimmedSeller &&
+    trimmedSeller.toLowerCase() !== 'campus student' &&
+    trimmedSeller.toLowerCase() !== 'verified student'
+  ) {
+    conditions.push(`seller_name.ilike.%${trimmedSeller}%`);
   }
+  query = query.or(conditions.join(','));
 
   const { data, error } = await query.order('updated_at', { ascending: false });
 
@@ -372,11 +385,13 @@ export async function fetchChatConversationsFromSupabase(
 
 export async function saveChatConversationToSupabase(conv: any, userId: string = 'user_active_student') {
   const currentFormattedTime = formatConversationTime(new Date());
+  const buyerId = conv.buyerId || conv.userId || userId;
+  const convId = conv.id || `conv-${conv.itemId}-${buyerId}`;
   const payload: Record<string, any> = {
-    id: conv.id,
+    id: convId,
     item_id: conv.itemId,
-    user_id: conv.buyerId || conv.userId || userId,
-    buyer_id: conv.buyerId || conv.userId || userId,
+    user_id: buyerId,
+    buyer_id: buyerId,
     buyer_name: conv.buyerName || 'Campus Student',
     buyer_avatar_uri: conv.buyerAvatarUri || null,
     buyer_year: conv.buyerYear || 'Verified Student',
@@ -434,12 +449,17 @@ export async function releaseEscrowToSeller(orderId: string, sellerId: string, a
   }
 }
 
-export async function fetchChatMessagesFromSupabase(itemId: string) {
-  const { data, error } = await supabase
-    .from('chat_messages')
-    .select('*')
-    .eq('item_id', itemId)
-    .order('created_at', { ascending: true });
+export async function fetchChatMessagesFromSupabase(itemId: string, conversationId?: string) {
+  let query = supabase.from('chat_messages').select('*');
+
+  if (conversationId) {
+    // Fetch messages specifically belonging to this conversation (or fallback to unassigned legacy messages for this item)
+    query = query.or(`conversation_id.eq.${conversationId},and(item_id.eq.${itemId},conversation_id.is.null)`);
+  } else {
+    query = query.eq('item_id', itemId);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: true });
 
   if (error) {
     console.warn('Error fetching messages from Supabase:', error.message);
@@ -448,6 +468,7 @@ export async function fetchChatMessagesFromSupabase(itemId: string) {
 
   return (data || []).map((row) => ({
     id: row.id,
+    conversationId: row.conversation_id || undefined,
     sender: row.sender as 'me' | 'seller' | 'buyer' | 'system',
     text: row.text || undefined,
     imageUri: row.image_uri || undefined,
@@ -459,13 +480,14 @@ export async function fetchChatMessagesFromSupabase(itemId: string) {
 export async function saveChatMessageToSupabase(msg: {
   id: string;
   itemId: string;
+  conversationId?: string;
   sender: 'me' | 'seller' | 'buyer' | 'system';
   text?: string;
   imageUri?: string;
   timestamp?: string;
 }) {
   const currentFormattedTime = formatMessageTime(new Date());
-  const payload = {
+  const payload: Record<string, any> = {
     id: msg.id,
     item_id: msg.itemId,
     sender: msg.sender,
@@ -473,6 +495,9 @@ export async function saveChatMessageToSupabase(msg: {
     image_uri: msg.imageUri || null,
     timestamp: msg.timestamp && msg.timestamp !== 'Just now' ? msg.timestamp : currentFormattedTime,
   };
+  if (msg.conversationId) {
+    payload.conversation_id = msg.conversationId;
+  }
 
   const { error } = await supabase.from('chat_messages').upsert(payload, { onConflict: 'id' });
   if (error) console.warn('Error saving message to Supabase:', error.message);

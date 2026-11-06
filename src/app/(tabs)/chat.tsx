@@ -68,6 +68,19 @@ export default function ChatInboxScreen() {
   );
 
   const filteredConversations = conversations.filter((c) => {
+    // Defense-in-depth: Ensure conversation belongs strictly to active user
+    const currentId = currentUser?.id || '';
+    const currentName = currentUser?.fullName?.trim().toLowerCase() || '';
+    if (currentId && currentId !== 'user_active_student') {
+      const isBuyer = c.buyerId === currentId || c.userId === currentId;
+      const isSeller =
+        (c.sellerId && c.sellerId === currentId) ||
+        (currentName &&
+          c.sellerName?.trim().toLowerCase() !== 'campus student' &&
+          c.sellerName?.trim().toLowerCase() === currentName);
+      if (!isBuyer && !isSeller) return false;
+    }
+
     const matchesFilter =
       activeFilter === 'all' ? true : c.tradeType === activeFilter;
     const q = searchQuery.trim().toLowerCase();
@@ -280,8 +293,11 @@ export default function ChatInboxScreen() {
                   pathname: '/chat/[id]',
                   params: {
                     id: item.itemId,
+                    conversationId: item.id,
                     sellerName: item.sellerName,
                     buyerName: item.buyerName || (isUserTheSeller ? counterpartName : currentUser?.fullName),
+                    buyerId: item.buyerId || item.userId || undefined,
+                    sellerId: item.sellerId || undefined,
                     sellerAvatarUri: item.sellerAvatarUri || undefined,
                     buyerAvatarUri: item.buyerAvatarUri || undefined,
                     isSeller: isUserTheSeller ? 'true' : 'false',

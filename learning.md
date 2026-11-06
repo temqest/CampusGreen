@@ -605,3 +605,25 @@ This document captures project-specific design standards, user preferences, and 
 - **Controlled Rating Updates Over Repeat Loop Creation**:
   - Once a student rates their peer, block repeat automatic popups (`if (!hasRatedPeer)`).
   - Tapping the completed review badge or "Edit Rating" allows updating their existing rating, pre-populating their selected stars, review tags, and comment, and emits an updated review message rather than flooding the chat with duplicate review notifications.
+
+---
+
+### 32. Multi-Account Chat Isolation & Cross-User Cache Boundary
+- **User-Scoped Local Storage Keys**:
+  - Never cache private student communications under a shared global key (e.g. `@uniswap_chat_conversations`).
+  - Always scope device cache keys by student ID: `@uniswap_chat_conversations_${userId}`.
+  - On sign-out, purge all active and legacy chat keys via `AsyncStorage.multiRemove` to prevent data leakage across account switches on shared physical devices.
+- **Provider State Reset on Authentication Boundaries**:
+  - Root layout providers (`ChatProvider`) do not unmount during client-side navigation (`router.replace('/(auth)/login')`).
+  - Always subscribe `ChatProvider` to `supabase.auth.onAuthStateChange` and expose a `clearChatData()` callback.
+  - When `SIGNED_OUT`, instantly wipe in-memory state: `conversations = []`, `conversationsRef.current = []`, `messagesByItemId = {}`, and `currentUser = null`.
+- **Zero-Fallthrough for Empty Inboxes**:
+  - When a brand-new student logs in and queries their conversations from Supabase, receiving `[]` (0 conversations) is a valid, normal state.
+  - Never treat `liveConvs.length === 0` as a trigger to fall back to unverified local device storage. An empty inbox must remain empty (`setConversations([])`).
+  - Only read from disk cache if a genuine network exception occurred, and strictly verify that the cached conversations belong to the active user's ID.
+- **Unique Conversation Partitioning (`conv-${itemId}-${buyerId}`)**:
+  - Never key conversations solely on `conv-${item.id}`. Multiple students can inquire about or barter for the same listed item simultaneously.
+  - Always key conversations by item and buyer: `conv-${item.id}-${buyerId}`.
+  - All messages in `chat_messages` must record `conversation_id`, and queries must filter by `conversation_id` so messages between Seller S and Buyer 1 are never exposed to Buyer 2.
+- **Defense-in-Depth Feed Filtering**:
+  - In both the database query and the UI render feed (`(tabs)/chat.tsx`), filter conversations strictly: `c.buyerId === currentId || c.userId === currentId || c.sellerId === currentId`. Conversations belonging to other students must never render in the inbox.

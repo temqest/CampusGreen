@@ -21,11 +21,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchProfileByEmailFromSupabase, getStudentUserId, saveProfileToSupabase } from '@/lib/database';
 import { supabase } from '@/lib/supabase';
+import { useChat } from '@/context/chat-context';
 
 export default function LoginScreen() {
   const theme = useTheme();
   const colorScheme = useColorScheme();
   const router = useRouter();
+  const { refreshConversations } = useChat();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -98,6 +100,8 @@ export default function LoginScreen() {
         ...activePayload,
         id: computedUserId,
       });
+
+      await refreshConversations().catch(() => {});
 
       setIsLoading(false);
       router.replace('/(tabs)/marketplace');

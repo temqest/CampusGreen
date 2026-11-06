@@ -20,6 +20,7 @@ import { useTheme } from '@/hooks/use-theme';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getStudentUserId, saveProfileToSupabase } from '@/lib/database';
+import { useChat } from '@/context/chat-context';
 
 const YEAR_LEVELS = [
   { id: '1', label: '1st Year' },
@@ -105,6 +106,7 @@ export default function OnboardingScreen() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const { name, email } = useLocalSearchParams<{ name?: string; email?: string }>();
+  const { refreshConversations } = useChat();
 
   // 3-Step Need-Focused Flow:
   // Step 1: Your Academic Focus (Year & Degree)
@@ -168,6 +170,7 @@ export default function OnboardingScreen() {
       try {
         await AsyncStorage.setItem('@uniswap_user_profile', JSON.stringify(profilePayload));
         await saveProfileToSupabase(profilePayload);
+        await refreshConversations().catch(() => {});
       } catch (err) {
         console.warn('Error saving onboarded user profile:', err);
       } finally {

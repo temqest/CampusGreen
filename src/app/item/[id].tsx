@@ -647,11 +647,12 @@ export default function ItemDetailScreen() {
                 },
               ]}
               onPress={() => {
-                ensureConversation(item);
+                const conv = ensureConversation(item);
                 router.push({
                   pathname: '/chat/[id]',
                   params: {
                     id: item.id,
+                    conversationId: conv.id,
                     sellerName: item.sellerName,
                     sellerAvatarUri: item.sellerAvatarUri || undefined,
                     buyerName: currentUserFullName || undefined,
@@ -726,11 +727,12 @@ export default function ItemDetailScreen() {
                 },
               ]}
               onPress={() => {
-                ensureConversation(item);
+                const conv = ensureConversation(item);
                 router.push({
                   pathname: '/chat/[id]',
                   params: {
                     id: item.id,
+                    conversationId: conv.id,
                     sellerName: item.sellerName,
                     sellerAvatarUri: item.sellerAvatarUri || undefined,
                     buyerName: currentUserFullName || undefined,
@@ -796,11 +798,12 @@ export default function ItemDetailScreen() {
               },
             ]}
             onPress={() => {
-              ensureConversation(item);
+              const conv = ensureConversation(item);
               router.push({
                 pathname: '/chat/[id]',
                 params: {
                   id: item.id,
+                  conversationId: conv.id,
                   sellerName: item.sellerName,
                   sellerAvatarUri: item.sellerAvatarUri || undefined,
                   buyerName: currentUserFullName || undefined,
@@ -902,13 +905,14 @@ export default function ItemDetailScreen() {
               ]}
               onPress={() => {
                 const offered = offeredTradeItem.trim();
-                ensureConversation(item);
+                const conv = ensureConversation(item);
                 setSwapModalVisible(false);
                 setOfferedTradeItem('');
                 router.push({
                   pathname: '/chat/[id]',
                   params: {
                     id: item.id,
+                    conversationId: conv.id,
                     sellerName: item.sellerName,
                     sellerAvatarUri: item.sellerAvatarUri || undefined,
                     offeredItem: offered,

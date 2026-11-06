@@ -224,11 +224,12 @@ export default function BasketScreen() {
                     },
                   ]}
                   onPress={() => {
-                    ensureConversation(item);
+                    const conv = ensureConversation(item);
                     router.push({
                       pathname: '/chat/[id]',
                       params: {
                         id: item.id,
+                        conversationId: conv.id,
                         sellerName: item.sellerName,
                         sellerAvatarUri: item.sellerAvatarUri || undefined,
                         itemTitle: item.title,
